@@ -92,10 +92,19 @@ export default function TransactionReportingPage() {
         return;
       }
 
-      const loadedTrades = (trades ?? []) as TradeRow[];
-      setRows(loadedTrades);
+      const loadedTrades: TradeRow[] = (trades ?? []).map((t: any) => ({
+  id: t.id,
+  reference: t.reference ?? null,
+  trade_date: t.trade_date,
+  total_size: t.total_size ?? null,
+  reportable: t.reportable,
+  booking_timestamp: t.booking_timestamp ?? null,
+  product: Array.isArray(t.product) ? (t.product[0] ?? null) : (t.product ?? null),
+}));
 
-      const tradeIds = loadedTrades.map((t) => t.id);
+setRows(loadedTrades);
+
+const tradeIds = loadedTrades.map((t) => t.id);
 
       if (tradeIds.length) {
         const { data: links } = await supabase
