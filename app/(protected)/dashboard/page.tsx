@@ -361,7 +361,7 @@ export default function AnalyticsPage() {
         console.error(error);
         setRows([]);
       } else {
-        setRows((data ?? []) as Row[]);
+        setRows((data ?? []) as unknown as Row[]);
       }
 
       setLoading(false);
