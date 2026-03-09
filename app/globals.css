@@ -1,0 +1,163 @@
+@import "tailwindcss";
+
+/* 
+  Fintech theme tokens (shadcn-style).
+  IMPORTANT:
+  - Variables are HSL triplets (e.g. "212 100% 16%") so you can use: hsl(var(--primary))
+  - Your brand palette:
+      Navy: #002652  -> hsl(212 100% 16%)
+      Blue: #005F9B  -> hsl(203 100% 30%)
+      Grey: #405363  -> hsl(207 22% 32%)
+    Plus blue tints blended with white for chart variety.
+*/
+
+:root {
+  /* Core surfaces */
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+
+  /* UI neutrals */
+  --muted: 210 40% 98%;
+  --muted-foreground: 215 16% 47%;
+
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 212 100% 16%; /* brand navy */
+
+  /* Brand */
+  --primary: 212 100% 16%;         /* #002652 */
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 203 100% 30%;       /* #005F9B */
+  --secondary-foreground: 0 0% 100%;
+
+  --accent: 203 48% 48%;           /* ~#4087B4 (blue tint) */
+  --accent-foreground: 0 0% 100%;
+
+  /* Status */
+  --destructive: 0 84% 55%;
+  --destructive-foreground: 0 0% 100%;
+
+  /* Radius (this drives the “rounded fintech” feel) */
+  --radius: 1.15rem;
+
+  /* Chart palette (ALL from your company palette family) */
+  --chart-1: 212 100% 16%;         /* Navy (#002652) */
+  --chart-2: 203 100% 30%;         /* Blue (#005F9B) */
+  --chart-3: 207 22% 32%;          /* Grey (#405363) */
+  --chart-4: 203 48% 48%;          /* Blue tint (~#4087B4) */
+  --chart-5: 203 44% 62%;          /* Blue tint (~#73A7C8) */
+  --chart-6: 203 44% 76%;          /* Blue tint (~#A6C7DC) */
+}
+
+.dark {
+  /* Dark mode tuned for finance UI (deep background, high contrast text) */
+  --background: 220 24% 6%;
+  --foreground: 210 40% 98%;
+
+  --card: 220 24% 8%;
+  --card-foreground: 210 40% 98%;
+
+  --muted: 220 20% 12%;
+  --muted-foreground: 215 20% 68%;
+
+  --border: 220 18% 18%;
+  --input: 220 18% 18%;
+  --ring: 203 100% 60%;
+
+  /* Brand in dark: keep hue, lift lightness for legibility */
+  --primary: 203 100% 60%;
+  --primary-foreground: 220 24% 8%;
+
+  --secondary: 203 85% 45%;
+  --secondary-foreground: 220 24% 8%;
+
+  --accent: 203 55% 55%;
+  --accent-foreground: 220 24% 8%;
+
+  --destructive: 0 72% 52%;
+  --destructive-foreground: 0 0% 100%;
+
+  /* Charts in dark: same family, slightly brighter */
+  --chart-1: 203 100% 60%;
+  --chart-2: 203 85% 45%;
+  --chart-3: 207 22% 60%;
+  --chart-4: 203 55% 55%;
+  --chart-5: 203 45% 65%;
+  --chart-6: 203 45% 75%;
+}
+
+/* Tailwind v4 theme bindings */
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --radius: var(--radius);
+
+  /* Keep your existing font tokens */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* Global base styling to get that “fintech UI” polish */
+html, body {
+  height: 100%;
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans), system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Subtle selection color in brand */
+::selection {
+  background: hsl(var(--primary) / 0.18);
+}
+
+/* Optional: nicer scrollbars (desktop) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--primary) / 0.35) transparent;
+}
+*::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary) / 0.30);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+html {
+  font-size: 14px;
+}
