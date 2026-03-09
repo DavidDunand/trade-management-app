@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -98,7 +100,11 @@ function NavItem({ item }: { item: NavItemDef }) {
   );
 }
 
-export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
+export default function ProtectedLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -107,12 +113,17 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
     let ignore = false;
 
     const load = async () => {
-      setLoading(true);
+      if (!ignore) setLoading(true);
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData.session;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
       if (!session) {
+        if (!ignore) {
+          setProfile(null);
+          setLoading(false);
+        }
         router.replace("/login");
         return;
       }
@@ -125,23 +136,31 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
 
       if (error || !data || !data.active) {
         await supabase.auth.signOut();
+        if (!ignore) {
+          setProfile(null);
+          setLoading(false);
+        }
         router.replace("/login");
         return;
       }
 
-      if (!ignore) setProfile(data as Profile);
-      setLoading(false);
+      if (!ignore) {
+        setProfile(data as Profile);
+        setLoading(false);
+      }
     };
 
     load();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
       load();
     });
 
     return () => {
       ignore = true;
-      sub.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
   }, [router]);
 
@@ -159,7 +178,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
   const docItems: NavItemDef[] = useMemo(
     () => [
       { href: "/trade-tickets", label: "Trade Ticket", icon: FileText, adminOnly: true, disabled: true },
-      { href: "/transaction-reporting", label: "MiFID 2 Report", icon: FileSpreadsheet, adminOnly: true, disabled: false },
+      { href: "/transaction-reporting", label: "MiFID 2 Report", icon: FileSpreadsheet, adminOnly: true },
       { href: "/invoicing", label: "Invoicing", icon: FileSpreadsheet, adminOnly: true, disabled: true },
     ],
     []
@@ -170,7 +189,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
       { href: "/products", label: "Products", icon: Package, adminOnly: true },
       { href: "/issuers", label: "Issuers", icon: Building2, adminOnly: true },
       { href: "/counterparties", label: "Counterparties", icon: Handshake, adminOnly: true },
-      { href: "/advisors", label: "Clients", icon: Users, adminOnly: true }, // renamed display only
+      { href: "/advisors", label: "Clients", icon: Users, adminOnly: true },
       { href: "/sales", label: "Sales", icon: BriefcaseBusiness, adminOnly: true },
     ],
     []
@@ -192,19 +211,18 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
     );
   }
 
+  if (!profile) return null;
+
   return (
     <div className="min-h-screen flex bg-background text-foreground">
-      {/* Sidebar */}
       <aside className="w-64 text-white flex flex-col bg-[hsl(var(--primary))]">
-        {/* Header */}
         <div className="px-5 py-5 border-b border-white/10">
           <div className="text-[15px] font-semibold tracking-tight">Valeur Europe</div>
           <div className="text-[11px] text-white/70 mt-1">
-            {profile?.full_name} • {profile?.role}
+            {profile.full_name} • {profile.role}
           </div>
         </div>
 
-        {/* Scrollable middle section */}
         <div className="flex-1 overflow-y-auto">
           <nav className="px-3 pb-3">
             <NavSectionTitle>Trading</NavSectionTitle>
@@ -228,7 +246,6 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
               ))}
             </div>
 
-            {/* space before FX widget */}
             <div className="h-5" />
 
             <div className="px-1 pb-3">
@@ -237,7 +254,6 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
           </nav>
         </div>
 
-        {/* Sign Out fixed bottom */}
         <div className="p-4 border-t border-white/10">
           <button
             onClick={signOut}
@@ -248,7 +264,6 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      {/* Main */}
       <main className="flex-1 p-8 bg-gradient-to-b from-zinc-50 to-white dark:from-zinc-950 dark:to-zinc-950">
         {children}
       </main>
