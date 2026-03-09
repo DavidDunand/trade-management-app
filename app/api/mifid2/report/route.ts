@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
   const templateBuf = await fs.readFile(templatePath);
 
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(templateBuf);
+  await wb.xlsx.load(templateBuf as any);
   const ws = wb.worksheets[0];
   if (!ws) return NextResponse.json({ error: "Template worksheet missing" }, { status: 500 });
 
