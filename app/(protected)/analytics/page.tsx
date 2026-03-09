@@ -269,7 +269,7 @@ export default function AnalyticsPage() {
         console.error("Analytics Supabase error:", JSON.stringify(error, null, 2));
         setRows([]);
       } else {
-        setRows((data ?? []) as Row[]);
+      setRows((data ?? []) as unknown as Row[]);
       }
 
       setLoading(false);
