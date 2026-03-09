@@ -161,7 +161,7 @@ export default function ProductsPage() {
       )
       .order("created_at", { ascending: false });
 
-    if (!error && data) setProducts(data as Product[]);
+    if (!error && data) setProducts(data as unknown as Product[]);
   };
 
   const resetForm = () => {
