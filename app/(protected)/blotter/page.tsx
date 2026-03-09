@@ -432,6 +432,78 @@ function normalizedPrices(t: TradeRow) {
   };
 }
 
+function rowBg(index: number) {
+  return index % 2 === 0 ? "#DCE6F1" : "#FFFFFF";
+}
+
+function labelCellHtml(label: string, bg: string) {
+  return `
+    <td style="
+      width: 240px;
+      background: ${bg};
+      border-top: 1px solid #ffffff;
+      padding: 8px 12px;
+      font-weight: 700;
+      color: #4a4a4a;
+      vertical-align: top;
+    ">
+      ${htmlEscape(label)}
+    </td>
+  `;
+}
+
+function valueCellHtml(valueHtml: string, bg: string) {
+  return `
+    <td style="
+      background: ${bg};
+      border-top: 1px solid #ffffff;
+      padding: 8px 12px;
+      font-weight: 700;
+      color: #111111;
+      vertical-align: top;
+    ">
+      ${valueHtml}
+    </td>
+  `;
+}
+
+function retroDisplayHtml(
+  settlement: Settlement | undefined,
+  cut: number | null | undefined,
+  amount: number | null | undefined,
+  ccy: string,
+  color: string
+) {
+  const cutStr =
+    settlement === "percent"
+      ? `${fmt2(cut ?? null)}%`
+      : `${fmt2(cut ?? null)} ${ccy} per unit`;
+
+  const amtStr = `${formatSwiss2(amount ?? null)} ${ccy}`;
+
+  return `Cut: <span style="color:${color}; font-weight:700;">${htmlEscape(cutStr)}</span> | Amount: <span style="color:${color}; font-weight:700;">${htmlEscape(amtStr)}</span>`;
+}
+
+function pnlDisplayHtml(
+  settlement: Settlement | undefined,
+  cut: number | null | undefined,
+  amount: number | null | undefined,
+  ccy: string
+) {
+  const positive = Number(amount ?? 0) >= 0;
+  const color = positive ? "#008000" : "#C00000";
+
+  const cutStr =
+    settlement === "percent"
+      ? `${fmt2(cut ?? null)}%`
+      : `${fmt2(cut ?? null)} ${ccy} per unit`;
+
+  const amtStr = `${formatSwiss2(amount ?? null)} ${ccy}`;
+
+  return `Cut: <span style="color:${color}; font-weight:700;">${htmlEscape(cutStr)}</span> | Amount: <span style="color:${color}; font-weight:700;">${htmlEscape(amtStr)}</span>`;
+}
+
+
 function buildEmlForTrade(args: { trade: TradeRow; legs: LegRow[] }) {
   const { trade: t, legs } = args;
 
@@ -443,96 +515,139 @@ function buildEmlForTrade(args: { trade: TradeRow; legs: LegRow[] }) {
   const settlement = t.product?.settlement;
 
   const subject = `Recap ${isin} / ${type} ${product}`.trim();
+  const bannerTitle = subject.replace(/^Recap\s+/i, "");
 
-  // Contacts: not available in current code; keep safe fallbacks.
-  // If you later add fields, just replace these.
-const clientContactObj = t.client_contact ?? null;
-const introducerContactObj = t.introducer_contact ?? null;
+  const clientContactObj = t.client_contact ?? null;
+  const introducerContactObj = t.introducer_contact ?? null;
 
-const clientContactStr = clientContactObj
-  ? `${clientContactObj.first_name ?? ""} ${clientContactObj.family_name ?? ""}`.trim()
-  : "-";
+  const clientContactStr = clientContactObj
+    ? `${clientContactObj.first_name ?? ""} ${clientContactObj.family_name ?? ""}`.trim()
+    : "-";
 
-const introducerContactStr = introducerContactObj
-  ? `${introducerContactObj.first_name ?? ""} ${introducerContactObj.family_name ?? ""}`.trim()
-  : "-";
+  const introducerContactStr = introducerContactObj
+    ? `${introducerContactObj.first_name ?? ""} ${introducerContactObj.family_name ?? ""}`.trim()
+    : "-";
 
-const { reoffer, client } = normalizedPrices(t);
+  const { reoffer, client } = normalizedPrices(t);
 
-const reofferStr = priceDisplay(settlement, reoffer);
-const clientPriceStr = priceDisplay(settlement, client);
+  const reofferStr = priceDisplay(settlement, reoffer);
+  const clientPriceStr = priceDisplay(settlement, client);
 
-  const invAmt = investmentAmount(settlement, t.total_size, t.sell_price);
+  const invAmt = investmentAmount(settlement, t.total_size, client);
 
   const splitLines = buildTradeSplitLines(legs);
 
-  const rows: Array<[string, string]> = [
-    ["Sales", t.sales_name ?? "-"],
-    ["Booking Entity", t.booking_entity?.legal_name ?? "-"],
-    ["Distribution Entity", t.distributing_entity?.legal_name ?? "-"],
-    ["Trade Date", formatDateDDMonYYYY(t.trade_date)],
-    ["Value Date", formatDateDDMonYYYY(t.value_date)],
-    ["Client", t.client_name ?? "-"],
-    ["Client Contact", clientContactStr],
-    ["Introducer", t.introducer_name ?? "-"],
-    ["Introducer Contact", introducerContactStr],
-    ["Currency", ccy || "-"],
-    ["Trade Direction", type || "-"],
-    ["Issuer", issuer || "-"],
-    ["ISIN", isin || "-"],
-    ["Quotation Type", settlement ?? "-"],
-    ["", ""],
-    ["Reoffer Price", reofferStr],
-    ["Client Retro", retroDisplay(settlement, t.retro_client_input, t.retro_client, ccy)],
-    ["Introducer Retro", retroDisplay(settlement, t.retro_introducer_input, t.retro_introducer, ccy)],
-    ["Custodian Fee", retroDisplay(settlement, t.fee_custodian_input, t.fee_custodian, ccy)],
+  const pnlCut =
+  (Number(t.sell_price ?? 0) - Number(t.buy_price ?? 0)) -
+  Number(t.retro_client_input ?? 0) -
+  Number(t.retro_introducer_input ?? 0) -
+  Number(t.fee_custodian_input ?? 0);
 
-  ["P&L (CCY)", retroDisplay(
-  settlement,
-  // P&L cut calculation (same logic as drawer)
-  (Number(t.sell_price ?? 0) - Number(t.buy_price ?? 0))
-    - Number(t.retro_client_input ?? 0)
-    - Number(t.retro_introducer_input ?? 0)
-    - Number(t.fee_custodian_input ?? 0),
-  t.pnl_trade_ccy,
-  ccy
-)],
+  // Put your real hosted logo URL here.
+  // Example: https://your-domain.com/valeur-logo.png
+  const logoUrl = "https://your-public-domain.com/valeur-logo.png";
 
-    ["Client Price", clientPriceStr],
-    ["", ""],
-    ["Volume", formatSwiss2(t.total_size)],
-    ["Investment Amount", invAmt === null ? "-" : `${formatSwiss2(invAmt)} ${ccy}`],
-    ["Split", splitLines.join("\n")],
+  type EmailRow = {
+    label: string;
+    valueHtml: string;
+    isSpacer?: boolean;
+  };
+
+  const rows: EmailRow[] = [
+    { label: "Sales", valueHtml: htmlEscape(t.sales_name ?? "-") },
+    { label: "Booking Entity", valueHtml: htmlEscape(t.booking_entity?.legal_name ?? "-") },
+    { label: "Distribution Entity", valueHtml: htmlEscape(t.distributing_entity?.legal_name ?? "-") },
+    { label: "Trade Date", valueHtml: htmlEscape(formatDateDDMonYYYY(t.trade_date)) },
+    { label: "Value Date", valueHtml: htmlEscape(formatDateDDMonYYYY(t.value_date)) },
+    { label: "Client", valueHtml: htmlEscape(t.client_name ?? "-") },
+    { label: "Client Contact", valueHtml: htmlEscape(clientContactStr) },
+    { label: "Introducer", valueHtml: htmlEscape(t.introducer_name ?? "-") },
+    { label: "Introducer Contact", valueHtml: htmlEscape(introducerContactStr) },
+    { label: "Currency", valueHtml: htmlEscape(ccy || "-") },
+    { label: "Trade Direction", valueHtml: htmlEscape(type || "-") },
+    { label: "Issuer", valueHtml: htmlEscape(issuer || "-") },
+    { label: "ISIN", valueHtml: htmlEscape(isin || "-") },
+    { label: "Quotation Type", valueHtml: htmlEscape(settlement ?? "-") },
+
+    { label: "", valueHtml: "", isSpacer: true },
+
+    { label: "Reoffer Price", valueHtml: htmlEscape(reofferStr) },
+    {
+      label: "Client Retro",
+      valueHtml: retroDisplayHtml(settlement, t.retro_client_input, t.retro_client, ccy, "#C00000"),
+    },
+    {
+      label: "Introducer Retro",
+      valueHtml: retroDisplayHtml(settlement, t.retro_introducer_input, t.retro_introducer, ccy, "#C00000"),
+    },
+    {
+      label: "Custodian Fee",
+      valueHtml: retroDisplayHtml(settlement, t.fee_custodian_input, t.fee_custodian, ccy, "#C00000"),
+    },
+    {
+      label: "P&L (CCY)",
+      valueHtml: pnlDisplayHtml(settlement, pnlCut, t.pnl_trade_ccy, ccy),
+    },
+    { label: "Client Price", valueHtml: htmlEscape(clientPriceStr) },
+
+    { label: "", valueHtml: "", isSpacer: true },
+
+    { label: "Volume", valueHtml: htmlEscape(formatSwiss2(t.total_size)) },
+    {
+      label: "Investment Amount",
+      valueHtml: htmlEscape(invAmt === null ? "-" : `${formatSwiss2(invAmt)} ${ccy}`),
+    },
+    {
+      label: "Split",
+      valueHtml: htmlEscape(splitLines.join("\n")).replaceAll("\n", "<br/>"),
+    },
   ];
+
+  let visibleRowIndex = 0;
+
+  const tableRowsHtml = rows
+    .map((row) => {
+      if (row.isSpacer) {
+        return `<tr><td colspan="2" style="height:14px; background:#ffffff; border:0;"></td></tr>`;
+      }
+
+      const bg = rowBg(visibleRowIndex);
+      visibleRowIndex += 1;
+
+      return `<tr>
+        ${labelCellHtml(row.label, bg)}
+        ${valueCellHtml(row.valueHtml, bg)}
+      </tr>`;
+    })
+    .join("");
 
   const html = `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>${htmlEscape(subject)}</title>
+    <title>${htmlEscape(bannerTitle)}</title>
   </head>
-  <body style="font-family: Arial, sans-serif; font-size: 12px; color: #111;">
-    <table cellpadding="6" cellspacing="0" style="border-collapse: collapse; width: 100%; max-width: 820px;">
-      ${rows
-        .map(([a, b]) => {
-          if (!a && !b) {
-            return `<tr><td colspan="2" style="border-top: 1px solid #e5e5e5;">&nbsp;</td></tr>`;
-          }
-          const bHtml =
-            a === "Split"
-              ? htmlEscape(b).replaceAll("\n", "<br/>")
-              : htmlEscape(b);
-          return `<tr>
-            <td style="width: 240px; border-top: 1px solid #e5e5e5; font-weight: 700; color: #444;">${htmlEscape(a)}</td>
-            <td style="border-top: 1px solid #e5e5e5; font-weight: 700; color: #111;">${bHtml}</td>
-          </tr>`;
-        })
-        .join("")}
-    </table>
+  <body style="margin:0; padding:0; font-family: Arial, Helvetica, sans-serif; background:#ffffff; color:#111;">
+    <div style="max-width:820px; margin:0 auto; background:#ffffff;">
+      
+      <div style="background:#002651; padding:22px 24px 14px 24px; text-align:center;">
+        <div style="color:#ffffff; font-size:30px; font-weight:700; letter-spacing:0.5px; margin-bottom:10px;">
+  Trade Recap
+</div>
+        <div style="color:#ffffff; font-size:24px; font-weight:700; line-height:1.35;">
+          ${htmlEscape(bannerTitle)}
+        </div>
+      </div>
+
+      <div style="padding:18px 20px 24px 20px;">
+        <table cellpadding="0" cellspacing="0" style="border-collapse:collapse; width:100%; font-size:14px;">
+          ${tableRowsHtml}
+        </table>
+      </div>
+    </div>
   </body>
 </html>`;
 
-  // Minimal RFC822 / EML
   const eml =
     [
       `Subject: ${subject}`,
@@ -1246,7 +1361,9 @@ export default function BlotterPage() {
                       <td className="p-3">
                         {formatSwiss2(t.pnl_trade_ccy)} {ccy}
                       </td>
-                      <td className="p-3 font-bold text-green-700">{formatSwiss2(t.pnl_eur)} EUR</td>
+                      <td className={`p-3 font-bold ${Number(t.pnl_eur ?? 0) < 0 ? "text-red-700" : "text-green-700"}`}>
+  {formatSwiss2(t.pnl_eur)} EUR
+</td>
 
                       <td
                         className="p-3"
