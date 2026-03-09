@@ -279,10 +279,9 @@ if (!Number.isFinite(clientPrice) || clientPrice === 0) {
         trade_id: id,
       }))
     );
-    await supabase
-      .from("mifid_reports")
-      .update({ download_count: 1, last_downloaded_at: new Date().toISOString() })
-      .eq("id", reportRow.id);
+await supabase.rpc("increment_mifid_download", {
+  report_id_input: reportRow.id,
+});
   }
 
   const out = await wb.xlsx.writeBuffer();
