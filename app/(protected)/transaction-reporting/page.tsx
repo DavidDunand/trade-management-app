@@ -82,29 +82,29 @@ export default function TransactionReportingPage() {
           )
         `)
         .eq("reportable", true)
-        .order("trade_date", { ascending: false })
-        .order("reference", { ascending: true });
+        .order("trade_date", { ascending: false });
 
       if (error) {
         console.error(error);
-        setRows([]);
         setLoading(false);
         return;
       }
 
       const loadedTrades: TradeRow[] = (trades ?? []).map((t: any) => ({
-  id: t.id,
-  reference: t.reference ?? null,
-  trade_date: t.trade_date,
-  total_size: t.total_size ?? null,
-  reportable: t.reportable,
-  booking_timestamp: t.booking_timestamp ?? null,
-  product: Array.isArray(t.product) ? (t.product[0] ?? null) : (t.product ?? null),
-}));
+        id: t.id,
+        reference: t.reference ?? null,
+        trade_date: t.trade_date,
+        total_size: t.total_size ?? null,
+        reportable: t.reportable,
+        booking_timestamp: t.booking_timestamp ?? null,
+        product: Array.isArray(t.product)
+          ? (t.product[0] ?? null)
+          : (t.product ?? null),
+      }));
 
-setRows(loadedTrades);
+      setRows(loadedTrades);
 
-const tradeIds = loadedTrades.map((t) => t.id);
+      const tradeIds = loadedTrades.map((t) => t.id);
 
       if (tradeIds.length) {
         const { data: links } = await supabase
@@ -119,6 +119,7 @@ const tradeIds = loadedTrades.map((t) => t.id);
         (links ?? []).forEach((l: any) => {
           reportMap[l.trade_id] = l.report ?? null;
         });
+
         setReportLinks(reportMap);
 
         const { data: legs } = await supabase
@@ -133,10 +134,12 @@ const tradeIds = loadedTrades.map((t) => t.id);
           .in("trade_id", tradeIds);
 
         const cpMap: Record<string, Counterparty[]> = {};
+
         (legs ?? []).forEach((l: any) => {
           if (!cpMap[l.trade_id]) cpMap[l.trade_id] = [];
           if (l.counterparty) cpMap[l.trade_id].push(l.counterparty);
         });
+
         setCounterparties(cpMap);
 
         const yesterday = new Date();
@@ -144,11 +147,13 @@ const tradeIds = loadedTrades.map((t) => t.id);
         const y = yesterday.toISOString().slice(0, 10);
 
         const auto: Record<string, boolean> = {};
+
         loadedTrades.forEach((t) => {
           if (t.trade_date === y && !reportMap[t.id]) {
             auto[t.id] = true;
           }
         });
+
         setSelected(auto);
       }
 
@@ -171,7 +176,6 @@ const tradeIds = loadedTrades.map((t) => t.id);
     let missingMaturity = 0;
     let missingTimestamp = 0;
     let missingLei = 0;
-    let missingCountry = 0;
 
     rows.forEach((t) => {
       if (!t.product?.isin) missingIsin++;
@@ -179,9 +183,9 @@ const tradeIds = loadedTrades.map((t) => t.id);
       if (!t.booking_timestamp) missingTimestamp++;
 
       const cps = counterparties[t.id] ?? [];
+
       cps.forEach((cp) => {
         if (!cp?.lei) missingLei++;
-        if (!cp?.country_code) missingCountry++;
       });
     });
 
@@ -190,31 +194,32 @@ const tradeIds = loadedTrades.map((t) => t.id);
       missingMaturity,
       missingTimestamp,
       missingLei,
-      missingCountry,
       totalIssues:
         missingIsin +
         missingMaturity +
         missingTimestamp +
-        missingLei +
-        missingCountry,
+        missingLei,
     };
   }, [rows, counterparties]);
 
   const health = useMemo(() => {
     let pending = 0;
     let overdue = 0;
+    let created = 0;
 
     rows.forEach((t) => {
       const hasReport = !!reportLinks[t.id];
+
+      if (hasReport) created++;
+
       if (!hasReport) {
         pending++;
-        if (getUrgency(t.trade_date) === "overdue") {
-          overdue++;
-        }
+
+        if (getUrgency(t.trade_date) === "overdue") overdue++;
       }
     });
 
-    return { pending, overdue };
+    return { pending, overdue, created };
   }, [rows, reportLinks]);
 
   async function generate(tradeIds: string[]) {
@@ -224,15 +229,9 @@ const tradeIds = loadedTrades.map((t) => t.id);
       body: JSON.stringify({ tradeIds }),
     });
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      alert(`HTTP ${res.status}: ${text}`);
-      return;
-    }
-
     const cd = res.headers.get("content-disposition") ?? "";
     const match = /filename="([^"]+)"/.exec(cd);
-    const filename = match?.[1] ?? "RiverRock.MiFIR.xlsx";
+    const filename = match?.[1] ?? "MiFIR.xlsx";
 
     const blob = await res.blob();
     downloadBlob(blob, filename);
@@ -244,238 +243,256 @@ const tradeIds = loadedTrades.map((t) => t.id);
     setSelected((s) => ({ ...s, [id]: !s[id] }));
   }
 
-  const selectedIds = useMemo(
-    () => Object.entries(selected)
-      .filter(([, v]) => v)
-      .map(([k]) => k),
-    [selected]
-  );
+  const selectedIds = Object.entries(selected)
+    .filter(([, v]) => v)
+    .map(([k]) => k);
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm flex gap-8 text-sm">
-        <div>
-          <div className="text-black/60">Pending reports</div>
-          <div className="font-bold">{health.pending}</div>
-        </div>
+    <div className="p-8 space-y-8">
 
-        <div>
-          <div className="text-black/60">Overdue</div>
-          <div className="font-bold text-red-600">{health.overdue}</div>
-        </div>
+      {/* PAGE TITLE */}
 
-        <div>
-          <div className="text-black/60">Validation issues</div>
-          <div className="font-bold text-amber-600">{validation.totalIssues}</div>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold">
+          MiFID II Transaction Reporting
+        </h1>
+
+        <p className="text-gray-500 mt-1">
+          Reportable trades must be exported in the MiFIR transaction reporting
+          format and uploaded to your ARM within T+1 business day.
+        </p>
       </div>
 
-      <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
-        <div className="text-lg font-semibold">MiFID II Transaction Reporting</div>
+      {/* KPI CARDS */}
 
-        <div className="text-sm text-gray-600 mt-1">
-          Reportable trades must be exported in the MiFIR transaction reporting format and uploaded to your ARM within T+1 business day.
+      <div className="grid grid-cols-4 gap-6">
+
+        <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+          <div className="text-xs text-gray-500">Pending reports</div>
+          <div className="text-2xl font-bold mt-1">{health.pending}</div>
         </div>
 
-        <div className="mt-4 flex items-center gap-3">
-          <button
-            className={`px-3 py-2 rounded-lg border text-sm ${batchMode ? "bg-gray-900 text-white" : "bg-white"}`}
-            onClick={() => {
-              setBatchMode((b) => !b);
-              setSelected({});
-            }}
-          >
-            {batchMode ? "Batch Mode: ON" : "Batch Mode: OFF"}
-          </button>
-
-          <button
-            className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm disabled:opacity-50"
-            disabled={!batchMode || selectedIds.length < 2}
-            onClick={() => generate(selectedIds)}
-          >
-            Generate Batch ({selectedIds.length})
-          </button>
+        <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+          <div className="text-xs text-gray-500">Overdue</div>
+          <div className="text-2xl font-bold text-red-600 mt-1">
+            {health.overdue}
+          </div>
         </div>
+
+        <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+          <div className="text-xs text-gray-500">Validation issues</div>
+          <div className="text-2xl font-bold text-amber-600 mt-1">
+            {validation.totalIssues}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+          <div className="text-xs text-gray-500">Reports created</div>
+          <div className="text-2xl font-bold mt-1">
+            {health.created}
+          </div>
+        </div>
+
       </div>
 
-      {loading ? (
-        <div className="text-sm text-gray-500">Loading reportable trades…</div>
-      ) : (
-        <>
-          {validation.totalIssues > 0 && (
-            <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm">
-              <div className="font-semibold text-amber-800 mb-2">
-                Validation warnings
-              </div>
+      {/* BATCH ACTIONS */}
 
-              <div className="space-y-1 text-amber-700">
-                {validation.missingIsin > 0 && (
-                  <div>⚠ {validation.missingIsin} trade(s) missing ISIN</div>
-                )}
+<div className="grid grid-cols-2 gap-6 max-w-xl">
 
-                {validation.missingMaturity > 0 && (
-                  <div>⚠ {validation.missingMaturity} trade(s) missing maturity date</div>
-                )}
+<button
+onClick={() => setBatchMode((b) => !b)}
+className="flex items-center justify-between rounded-xl border border-black/10 bg-white p-4 hover:shadow-sm transition"
+>
 
-                {validation.missingTimestamp > 0 && (
-                  <div>⚠ {validation.missingTimestamp} trade(s) missing booking timestamp</div>
-                )}
+<div className="flex items-center gap-3">
 
-                {validation.missingLei > 0 && (
-                  <div>⚠ {validation.missingLei} counterparties missing LEI</div>
-                )}
+<div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
+💡
+</div>
 
-                {validation.missingCountry > 0 && (
-                  <div>⚠ {validation.missingCountry} counterparties missing country code</div>
-                )}
-              </div>
+<div>
+<div className="font-semibold">
+Batch Mode
+</div>
+
+<div className="text-sm text-gray-500">
+{batchMode ? "Disable batch selection" : "Enable batch selection"}
+</div>
+
+</div>
+
+</div>
+
+</button>
+
+<button
+disabled={!batchMode || selectedIds.length < 2}
+onClick={() => generate(selectedIds)}
+className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 p-4 hover:shadow-sm transition disabled:opacity-40"
+>
+
+<div className="flex items-center gap-3">
+
+<div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center">
+⬇
+</div>
+
+<div>
+<div className="font-semibold text-emerald-700">
+Generate Batch
+</div>
+
+<div className="text-sm text-emerald-600">
+{selectedIds.length} trades selected
+</div>
+
+</div>
+
+</div>
+
+</button>
+
+</div>
+
+      {/* TABLES */}
+
+      {grouped.map(([date, list]) => (
+        <div key={date} className="rounded-xl border border-black/10 bg-white shadow-sm">
+
+          <div className="px-4 py-3 border-b border-black/10 flex justify-between bg-black/[0.02]">
+            <div className="font-semibold flex gap-2">
+              {date}
+
+              {getUrgency(date) === "overdue" && (
+                <span className="text-red-600 text-xs font-semibold">
+                  Overdue
+                </span>
+              )}
             </div>
-          )}
 
-          {grouped.map(([date, list]) => (
-            <div
-              key={date}
-              className="rounded-2xl border border-black/10 bg-white shadow-sm"
-            >
-              <div className="px-4 py-3 border-b border-black/10 flex items-center justify-between bg-black/[0.02]">
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold">{date}</span>
-
-                  {(() => {
-                    const hasPending = list.some((t) => !reportLinks[t.id]);
-                    if (!hasPending) return null;
-
-                    const urgency = getUrgency(date);
-
-                    if (urgency === "overdue") {
-                      return (
-                        <span className="text-xs font-semibold text-red-600">
-                          Overdue
-                        </span>
-                      );
-                    }
-
-                    if (urgency === "due") {
-                      return (
-                        <span className="text-xs font-semibold text-amber-600">
-                          Due today
-                        </span>
-                      );
-                    }
-
-                    return null;
-                  })()}
-                </div>
-
-                <div className="text-xs text-gray-500">{list.length} trade(s)</div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-xs font-normal">
-                  <thead className="bg-[#002651] text-white">
-                    <tr>
-                      {batchMode && <th className="px-3 py-3">Select</th>}
-                      <th className="px-3 py-3 text-left">Reference</th>
-                      <th className="px-3 py-3 text-left">ISIN</th>
-                      <th className="px-3 py-3 text-left">Product</th>
-                      <th className="px-3 py-3 text-right">Size</th>
-                      <th className="px-3 py-3 text-center">Status</th>
-                      <th className="px-3 py-3 text-center">Created</th>
-                      <th className="px-3 py-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {list.map((t) => {
-                      const issues: string[] = [];
-
-                      if (!t.product?.isin) issues.push("Missing ISIN");
-                      if (!t.product?.maturity_date) issues.push("Missing maturity");
-                      if (!t.booking_timestamp) issues.push("Missing timestamp");
-
-                      const cps = counterparties[t.id] ?? [];
-                      cps.forEach((cp) => {
-                        if (!cp?.lei) issues.push("Missing LEI");
-                        if (!cp?.country_code) issues.push("Missing country");
-                      });
-
-                      const hasIssues = issues.length > 0;
-                      const rep = reportLinks[t.id] ?? null;
-
-                      const status = rep
-                        ? "Available"
-                        : hasIssues
-                          ? "Validation issues"
-                          : "Pending";
-
-                      return (
-                        <tr
-                          key={t.id}
-                          className="border-t border-black/10 hover:bg-black/[0.02]"
-                        >
-                          {batchMode && (
-                            <td className="px-3 py-2 text-center">
-                              <input
-                                type="checkbox"
-                                checked={!!selected[t.id]}
-                                onChange={() => toggleSelect(t.id)}
-                              />
-                            </td>
-                          )}
-
-                          <td className="px-3 py-2 font-bold">{t.reference ?? "-"}</td>
-                          <td className="px-3 py-2 font-mono">{t.product?.isin ?? "-"}</td>
-                          <td className="px-3 py-2 text-center">{t.product?.product_name ?? "-"}</td>
-                          <td className="px-3 py-2 text-right font-bold">{t.total_size ?? "-"}</td>
-
-                          <td className="px-3 py-2 text-center">
-                            <span
-                              className={`inline-flex items-center justify-center min-w-[120px] px-2 py-1 text-xs border rounded-full font-bold ${
-                                status === "Available"
-                                  ? "bg-green-50 border-green-200 text-green-700"
-                                  : status === "Validation issues"
-                                    ? "bg-red-50 border-red-200 text-red-700"
-                                    : "bg-amber-50 border-amber-200 text-amber-700"
-                              }`}
-                              title={hasIssues ? issues.join(", ") : undefined}
-                            >
-                              {status}
-                            </span>
-                          </td>
-
-                          <td className="px-3 py-2 text-xs text-black/60 text-center">
-                            {rep?.created_at
-                              ? new Date(rep.created_at).toLocaleString()
-                              : "-"}
-                          </td>
-
-                          <td className="px-3 py-2 text-right">
-                            <button
-                              className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
-                                hasIssues
-                                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                                  : "bg-[#002651] text-white hover:opacity-95"
-                              }`}
-                              onClick={() => {
-                                if (hasIssues) return;
-                                generate([t.id]);
-                              }}
-                              disabled={hasIssues}
-                              title={hasIssues ? issues.join(", ") : "Download"}
-                            >
-                              Download
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+            <div className="text-xs text-gray-500">
+              {list.length} trade(s)
             </div>
-          ))}
-        </>
-      )}
+          </div>
+
+          <div className="overflow-x-auto">
+<table className="min-w-full text-xs font-normal">
+<thead className="bg-[#002651] text-white">
+<tr>
+{batchMode && <th className="px-3 py-3">Select</th>}
+<th className="px-3 py-3 text-left">Reference</th>
+<th className="px-3 py-3 text-left">ISIN</th>
+<th className="px-3 py-3 text-left">Product</th>
+<th className="px-3 py-3 text-right">Size</th>
+<th className="px-3 py-3 text-center">Status</th>
+<th className="px-3 py-3 text-center">Created</th>
+<th className="px-3 py-3 text-right">Actions</th>
+</tr>
+</thead>
+
+<tbody>
+{list.map((t) => {
+
+const issues: string[] = [];
+
+if (!t.product?.isin) issues.push("Missing ISIN");
+if (!t.product?.maturity_date) issues.push("Missing maturity");
+if (!t.booking_timestamp) issues.push("Missing timestamp");
+
+const cps = counterparties[t.id] ?? [];
+
+cps.forEach((cp) => {
+if (!cp?.lei) issues.push("Missing LEI");
+});
+
+const hasIssues = issues.length > 0;
+const rep = reportLinks[t.id] ?? null;
+
+const status = rep
+? "Available"
+: hasIssues
+? "Validation issues"
+: "Pending";
+
+return (
+<tr key={t.id} className="border-t border-black/10 hover:bg-black/[0.02]">
+
+{batchMode && (
+<td className="px-3 py-2 text-center">
+<input
+type="checkbox"
+checked={!!selected[t.id]}
+onChange={() => toggleSelect(t.id)}
+/>
+</td>
+)}
+
+<td className="px-3 py-2 font-bold">{t.reference ?? "-"}</td>
+
+<td className="px-3 py-2 font-mono">{t.product?.isin ?? "-"}</td>
+
+<td className="px-3 py-2">{t.product?.product_name ?? "-"}</td>
+
+<td className="px-3 py-2 text-right font-bold">{t.total_size ?? "-"}</td>
+
+<td className="px-3 py-2 text-center">
+
+<span
+className={`inline-flex items-center justify-center min-w-[120px] px-2 py-1 text-xs border rounded-full font-bold ${
+status === "Available"
+? "bg-green-50 border-green-200 text-green-700"
+: status === "Validation issues"
+? "bg-red-50 border-red-200 text-red-700"
+: "bg-amber-50 border-amber-200 text-amber-700"
+}`}
+title={hasIssues ? issues.join(", ") : undefined}
+>
+
+{status}
+
+</span>
+
+</td>
+
+<td className="px-3 py-2 text-xs text-black/60 text-center">
+
+{rep?.created_at
+? new Date(rep.created_at).toLocaleString()
+: "-"}
+
+</td>
+
+<td className="px-3 py-2 text-right">
+
+<button
+className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
+hasIssues
+? "bg-gray-300 text-gray-500 cursor-not-allowed"
+: "bg-[#002651] text-white hover:opacity-95"
+}`}
+onClick={() => {
+if (hasIssues) return;
+generate([t.id]);
+}}
+disabled={hasIssues}
+>
+
+Download
+
+</button>
+
+</td>
+
+</tr>
+);
+})}
+</tbody>
+</table>
+</div>
+
+        </div>
+      ))}
+
     </div>
   );
 }
