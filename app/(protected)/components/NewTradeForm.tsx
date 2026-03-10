@@ -349,7 +349,11 @@ if (isUnwind) {
       setBookingEntityId(trade.booking_entity_id ?? "");
       setDistributingEntityId(trade.distributing_entity_id ?? "");
 
-      setBookingTimestamp(trade.booking_timestamp ? new Date(trade.booking_timestamp).toISOString().slice(0, 16) : "");
+      setBookingTimestamp(
+  trade.booking_timestamp
+    ? trade.booking_timestamp.slice(0, 16)
+    : ""
+);
       setReportable(!!trade.reportable);
 
       setClientName(trade.client_name ?? "");
@@ -501,7 +505,7 @@ if (isUnwind) {
         retro_introducer: retro_introducer_amt,
         fee_custodian: fee_custodian_amt,
         pnl_trade_ccy,
-        booking_timestamp: bookingTimestamp ? new Date(bookingTimestamp).toISOString() : null,
+        booking_timestamp: bookingTimestamp || null,
         reportable,
         client_name: clientName || null,
         introducer_name: introducerName || null,
