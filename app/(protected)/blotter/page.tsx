@@ -779,7 +779,7 @@ const issuerOptions = useMemo(
       new Set(
         rows
           .map(r => r.trade?.product?.issuer?.legal_name)
-          .filter(Boolean)
+          .filter((v): v is string => Boolean(v))
       )
     ).sort(),
   [rows]
