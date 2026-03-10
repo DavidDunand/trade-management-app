@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
       reportable,
       buy_price,
       sell_price,
-      product:products(id, isin, currency, maturity_date, product_name),
+      product:products(id, isin, currency, maturity_date, product_name, settlement),
       legs:trade_legs(
         id,
         leg,
@@ -250,7 +250,12 @@ if (!Number.isFinite(clientPrice) || clientPrice === 0) {
       ws.getCell(`AN${rowIdx}`).value = t.product.currency;
 
       ws.getCell(`AP${rowIdx}`).value = clientPrice;
-      ws.getCell(`AS${rowIdx}`).value = clientPrice * size;
+      const netAmount =
+  t.product?.settlement === "percent"
+    ? size * (clientPrice / 100)
+    : size * clientPrice;
+
+ws.getCell(`AS${rowIdx}`).value = netAmount;
 
       ws.getCell(`AZ${rowIdx}`).value = t.product.isin;
       ws.getCell(`BR${rowIdx}`).value = formatBR(maturity);
