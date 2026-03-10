@@ -360,15 +360,35 @@ Generate Batch
         <div key={date} className="rounded-xl border border-black/10 bg-white shadow-sm">
 
           <div className="px-4 py-3 border-b border-black/10 flex justify-between bg-black/[0.02]">
-            <div className="font-semibold flex gap-2">
-              {date}
+<div className="font-semibold flex gap-2">
+  {date}
 
-              {getUrgency(date) === "overdue" && (
-                <span className="text-red-600 text-xs font-semibold">
-                  Overdue
-                </span>
-              )}
-            </div>
+  {(() => {
+    const pendingTrades = list.filter((t) => !reportLinks[t.id]);
+
+    if (pendingTrades.length === 0) return null;
+
+    const urgency = getUrgency(date);
+
+    if (urgency === "overdue") {
+      return (
+        <span className="text-red-600 text-xs font-semibold">
+          Overdue
+        </span>
+      );
+    }
+
+    if (urgency === "due") {
+      return (
+        <span className="text-amber-600 text-xs font-semibold">
+          Due today
+        </span>
+      );
+    }
+
+    return null;
+  })()}
+</div>
 
             <div className="text-xs text-gray-500">
               {list.length} trade(s)
