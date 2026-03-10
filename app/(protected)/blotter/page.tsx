@@ -1,6 +1,37 @@
 "use client";
+
 export const dynamic = "force-dynamic";
 
+import { useRouter, useSearchParams } from "next/navigation";
+function useUrlState(key: string, defaultValue: string) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const value = searchParams.get(key) ?? defaultValue;
+
+  const setValue = (v: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (!v || v === defaultValue) {
+      params.delete(key);
+    } else {
+      params.set(key, v);
+    }
+
+    router.replace(`?${params.toString()}`, { scroll: false });
+  };
+
+  return [value, setValue] as const;
+}
+const MULTI_SEP = "|||";
+
+function parseMulti(raw: string) {
+  return raw ? raw.split(MULTI_SEP).map(decodeURIComponent).filter(Boolean) : [];
+}
+
+function stringifyMulti(values: string[]) {
+  return values.map((v) => encodeURIComponent(v)).join(MULTI_SEP);
+}
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/src/lib/supabase";
 import NewTradeForm from "../components/NewTradeForm"; // ✅ adjust path if your Blotter page is not in the same folder level
@@ -664,27 +695,240 @@ function buildEmlForTrade(args: { trade: TradeRow; legs: LegRow[] }) {
   return { eml, filename };
 }
 
+function MultiSelect({
+  label,
+  options,
+  selected,
+  toggle,
+  setAll,
+}: {
+  label: string
+  options: string[]
+  selected: string[]
+  toggle: (v: string) => void
+  setAll: (values: string[]) => void
+}) {
+  const [open, setOpen] = React.useState(false)
+const [filter,setFilter] = useState("")
+  return (
+    <div className="relative">
+      <button
+  type="button"
+  onClick={() => setOpen(!open)}
+        className="w-full rounded-xl border border-black/20 px-3 py-2 text-sm font-bold bg-white text-left"
+      >
+        {selected.length ? `${label} (${selected.length})` : label}
+      </button>
+
+      {open && (
+        <div className="absolute z-20 mt-1 w-full bg-white border border-black/10 rounded-xl shadow-lg max-h-60 overflow-auto">
+  <div className="flex items-center justify-between px-3 py-2 border-b border-black/10 bg-black/[0.02]">
+    <button
+      type="button"
+      onClick={() => setAll(options)}
+      className="text-xs font-bold text-[#002651] hover:underline"
+    >
+      Select all
+    </button>
+    <button
+      type="button"
+      onClick={() => setAll([])}
+      className="text-xs font-bold text-black/50 hover:underline"
+    >
+      Clear
+    </button>
+  </div>
+
+  <input
+    placeholder="Search..."
+    className="w-full px-3 py-2 border-b border-black/10 text-sm"
+    onChange={(e) => setFilter(e.target.value.toLowerCase())}
+  />
+
+  {options
+    .filter((o) => o.toLowerCase().includes(filter))
+    .map((o) => (
+            <label
+  key={o}
+  className={`flex items-center gap-2 px-3 py-2 text-sm cursor-pointer ${
+    selected.includes(o) ? "bg-blue-50 font-bold" : "hover:bg-black/5"
+  }`}
+>
+              <input
+                type="checkbox"
+                checked={selected.includes(o)}
+                onChange={() => toggle(o)}
+              />
+              {o}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function BlotterPage() {
+  const router = useRouter();
   const [rows, setRows] = useState<LegRow[]>([]);
   const [loading, setLoading] = useState(false);
 
+const issuerOptions = useMemo(
+  () =>
+    Array.from(
+      new Set(
+        rows
+          .map(r => r.trade?.product?.issuer?.legal_name)
+          .filter(Boolean)
+      )
+    ).sort(),
+  [rows]
+)
+
+const ccyOptions = useMemo(
+  () =>
+    Array.from(
+      new Set(rows.map(r => r.trade?.product?.currency).filter(Boolean))
+    ) as string[],
+  [rows]
+)
+
+const clientOptions = useMemo(
+  () =>
+    Array.from(
+      new Set(rows.map(r => r.trade?.client_name).filter(Boolean))
+    ) as string[],
+  [rows]
+)
+
+const introducerOptions = useMemo(
+  () =>
+    Array.from(
+      new Set(rows.map(r => r.trade?.introducer_name).filter(Boolean))
+    ) as string[],
+  [rows]
+)
+
+const salesOptions = useMemo(
+  () =>
+    Array.from(
+      new Set(rows.map(r => r.trade?.sales_name).filter(Boolean))
+    ) as string[],
+  [rows]
+)
   // Edit / Clone modal (uses NewTradeForm as modal)
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [tradeModalMode, setTradeModalMode] = useState<ModalMode>("edit");
   const [tradeModalSourceId, setTradeModalSourceId] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "booked" | "cancelled" | "archived">("all");
+  const [statusFilterRaw, setStatusFilterRaw] = useUrlState("status", "all");
+
+const statusFilter =
+  statusFilterRaw as "all" | "pending" | "booked" | "cancelled" | "archived";
+
+const setStatusFilter = (v: typeof statusFilter) => {
+  setStatusFilterRaw(v);
+};
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
+// Date Range Fixes
+
+function setDateRange(from: string, to: string) {
+  const params = new URLSearchParams(window.location.search)
+
+  if (from) params.set("from", from)
+  else params.delete("from")
+
+  if (to) params.set("to", to)
+  else params.delete("to")
+
+  router.replace(`?${params.toString()}`, { scroll: false })
+}
+
+
+function toLocalISO(d: Date) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
+function isPresetActive(from: string, to: string) {
+  return tradeDateFrom === from && tradeDateTo === to
+}
+
+function presetClass(active: boolean) {
+  return `rounded-lg border px-3 py-1 text-xs font-bold transition ${
+    active
+      ? "bg-[#002651] text-white border-[#002651]"
+      : "border-black/20 hover:bg-black/5"
+  }`
+}
 
   // extra filters
-  const [tradeDateFilter, setTradeDateFilter] = useState("");
-  const [isinFilter, setIsinFilter] = useState("");
-  const [issuerFilter, setIssuerFilter] = useState("");
-  const [ccyFilter, setCcyFilter] = useState("");
-  const [clientFilter, setClientFilter] = useState("");
-  const [introducerFilter, setIntroducerFilter] = useState("");
-  const [salesFilter, setSalesFilter] = useState("");
+  const [tradeDateFrom, setTradeDateFrom] = useUrlState("from", "");
+  const [tradeDateTo, setTradeDateTo] = useUrlState("to", "");
+  const [isinFilter, setIsinFilter] = useUrlState("isin", "");
+  const [issuerFilterRaw, setIssuerFilterRaw] = useUrlState("issuer", "");
+
+const issuerFilter = parseMulti(issuerFilterRaw)
+
+function toggleIssuer(value: string) {
+  const next = issuerFilter.includes(value)
+    ? issuerFilter.filter((v) => v !== value)
+    : [...issuerFilter, value];
+
+  setIssuerFilterRaw(stringifyMulti(next));
+}
+  const [ccyFilterRaw, setCcyFilterRaw] = useUrlState("ccy", "")
+const [clientFilterRaw, setClientFilterRaw] = useUrlState("client", "")
+const [introducerFilterRaw, setIntroducerFilterRaw] = useUrlState("introducer", "")
+const [salesFilterRaw, setSalesFilterRaw] = useUrlState("sales", "")
+
+const ccyFilter = parseMulti(ccyFilterRaw)
+const clientFilter = parseMulti(clientFilterRaw)
+const introducerFilter = parseMulti(introducerFilterRaw)
+const salesFilter = parseMulti(salesFilterRaw)
+
+function toggleCcy(v: string) {
+  const next = ccyFilter.includes(v) ? ccyFilter.filter((x) => x !== v) : [...ccyFilter, v]
+  setCcyFilterRaw(stringifyMulti(next))
+}
+
+function toggleClient(v: string) {
+  const next = clientFilter.includes(v) ? clientFilter.filter((x) => x !== v) : [...clientFilter, v]
+  setClientFilterRaw(stringifyMulti(next))
+}
+
+function toggleIntroducer(v: string) {
+  const next = introducerFilter.includes(v) ? introducerFilter.filter((x) => x !== v) : [...introducerFilter, v]
+  setIntroducerFilterRaw(stringifyMulti(next))
+}
+
+function toggleSales(v: string) {
+  const next = salesFilter.includes(v) ? salesFilter.filter((x) => x !== v) : [...salesFilter, v]
+  setSalesFilterRaw(stringifyMulti(next))
+}
+
+function setAllIssuer(values: string[]) {
+  setIssuerFilterRaw(stringifyMulti(values))
+}
+
+function setAllCcy(values: string[]) {
+  setCcyFilterRaw(stringifyMulti(values))
+}
+
+function setAllClient(values: string[]) {
+  setClientFilterRaw(stringifyMulti(values))
+}
+
+function setAllIntroducer(values: string[]) {
+  setIntroducerFilterRaw(stringifyMulti(values))
+}
+
+function setAllSales(values: string[]) {
+  setSalesFilterRaw(stringifyMulti(values))
+}
 
   const [openTrades, setOpenTrades] = useState<Record<string, boolean>>({});
   const [compactLegRows, setCompactLegRows] = useState(true);
@@ -870,12 +1114,10 @@ export default function BlotterPage() {
     const rawStatus = (t?.status ?? "").toLowerCase();
     const effStatus = (((t?.effective_status ?? t?.status) ?? "") as string).toLowerCase();
 
-    const locked =
-      rawStatus === "cancelled" ||
-      rawStatus === "archived" ||
-      !!t?.cancelled_at ||
-      rawStatus === "booked" ||
-      effStatus === "booked";
+const locked =
+  rawStatus === "cancelled" ||
+  rawStatus === "archived" ||
+  !!t?.cancelled_at;
 
     if (locked) {
       showToast("Status is locked for booked/cancelled/archived trades.");
@@ -1069,14 +1311,8 @@ export default function BlotterPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const isinQ = isinFilter.trim().toLowerCase();
-    const issuerQ = issuerFilter.trim().toLowerCase();
-    const ccyQ = ccyFilter.trim().toLowerCase();
-    const clientQ = clientFilter.trim().toLowerCase();
-    const introQ = introducerFilter.trim().toLowerCase();
-    const salesQ = salesFilter.trim().toLowerCase();
 
     const startIso = startDateForRange(timeRange);
-    const tradeDateExact = tradeDateFilter.trim();
 
     return rows.filter((r) => {
       const t = r.trade;
@@ -1086,14 +1322,37 @@ export default function BlotterPage() {
 
       if (statusFilter !== "all" && effStatus !== statusFilter) return false;
       if (startIso && (t.trade_date ?? "") < startIso) return false;
-      if (tradeDateExact && (t.trade_date ?? "") !== tradeDateExact) return false;
+      const tradeDate = t.trade_date ?? "";
+
+if (tradeDateFrom && tradeDate < tradeDateFrom) return false;
+if (tradeDateTo && tradeDate > tradeDateTo) return false;
 
       if (isinQ && !(t.product?.isin ?? "").toLowerCase().includes(isinQ)) return false;
-      if (issuerQ && !(t.product?.issuer?.legal_name ?? "").toLowerCase().includes(issuerQ)) return false;
-      if (ccyQ && !(t.product?.currency ?? "").toLowerCase().includes(ccyQ)) return false;
-      if (clientQ && !(t.client_name ?? "").toLowerCase().includes(clientQ)) return false;
-      if (introQ && !(t.introducer_name ?? "").toLowerCase().includes(introQ)) return false;
-      if (salesQ && !(t.sales_name ?? "").toLowerCase().includes(salesQ)) return false;
+      if (
+
+  issuerFilter.length &&
+  !issuerFilter.includes(t.product?.issuer?.legal_name ?? "")
+) return false;
+
+if (
+  ccyFilter.length &&
+  !ccyFilter.includes(t.product?.currency ?? "")
+) return false;
+
+if (
+  clientFilter.length &&
+  !clientFilter.includes(t.client_name ?? "")
+) return false;
+
+if (
+  introducerFilter.length &&
+  !introducerFilter.includes(t.introducer_name ?? "")
+) return false;
+
+if (
+  salesFilter.length &&
+  !salesFilter.includes(t.sales_name ?? "")
+) return false;
 
       if (!q) return true;
 
@@ -1119,7 +1378,7 @@ export default function BlotterPage() {
 
       return hay.includes(q);
     });
-  }, [rows, search, statusFilter, timeRange, tradeDateFilter, isinFilter, issuerFilter, ccyFilter, clientFilter, introducerFilter, salesFilter]);
+  }, [rows, search, statusFilter, timeRange, tradeDateFrom, tradeDateTo, isinFilter, issuerFilter, ccyFilter, clientFilter, introducerFilter, salesFilter]);
 
   const grouped: TradeGroup[] = useMemo(() => {
     const map = new Map<string, TradeGroup>();
@@ -1207,17 +1466,6 @@ export default function BlotterPage() {
             <option value="archived">Archived</option>
           </select>
 
-          <select
-            value={timeRange}
-            onChange={(e) => setTimeRange(e.target.value as any)}
-            className="rounded-xl border border-black/20 px-3 py-2 bg-white text-sm font-bold"
-          >
-            <option value="all">All Time</option>
-            <option value="year">Current Year</option>
-            <option value="quarter">Current Quarter</option>
-            <option value="month">Current Month</option>
-          </select>
-
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -1244,21 +1492,200 @@ export default function BlotterPage() {
 
       {/* Filters row */}
       <div className="rounded-2xl border border-black/10 p-4 bg-white">
-        <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
-          <input
-            type="date"
-            value={tradeDateFilter}
-            onChange={(e) => setTradeDateFilter(e.target.value)}
-            className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold"
-            title="Filter by Trade Date (exact)"
-          />
-          <input value={isinFilter} onChange={(e) => setIsinFilter(e.target.value)} placeholder="ISIN" className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold" />
-          <input value={issuerFilter} onChange={(e) => setIssuerFilter(e.target.value)} placeholder="Issuer" className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold" />
-          <input value={ccyFilter} onChange={(e) => setCcyFilter(e.target.value)} placeholder="CCY" className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold" />
-          <input value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} placeholder="Client" className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold" />
-          <input value={introducerFilter} onChange={(e) => setIntroducerFilter(e.target.value)} placeholder="Introducer" className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold" />
-          <input value={salesFilter} onChange={(e) => setSalesFilter(e.target.value)} placeholder="Sales" className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold" />
-        </div>
+       <div className="rounded-2xl border border-black/10 p-4 bg-white space-y-3">
+
+  {/* ROW 1 — COLUMN FILTERS */}
+  <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+
+    <input
+      value={isinFilter}
+      onChange={(e) => setIsinFilter(e.target.value)}
+      placeholder="ISIN"
+      className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold"
+    />
+
+<MultiSelect
+  label="Issuer"
+  options={issuerOptions}
+  selected={issuerFilter}
+  toggle={toggleIssuer}
+  setAll={setAllIssuer}
+/>
+
+<MultiSelect
+  label="CCY"
+  options={ccyOptions}
+  selected={ccyFilter}
+  toggle={toggleCcy}
+  setAll={setAllCcy}
+/>
+
+<MultiSelect
+  label="Client"
+  options={clientOptions}
+  selected={clientFilter}
+  toggle={toggleClient}
+  setAll={setAllClient}
+/>
+
+<MultiSelect
+  label="Introducer"
+  options={introducerOptions}
+  selected={introducerFilter}
+  toggle={toggleIntroducer}
+  setAll={setAllIntroducer}
+/>
+
+<MultiSelect
+  label="Sales"
+  options={salesOptions}
+  selected={salesFilter}
+  toggle={toggleSales}
+  setAll={setAllSales}
+/>
+
+  </div>
+
+
+  {/* ROW 2 — DATE FILTERS */}
+  <div className="flex items-center gap-3 flex-wrap">
+
+    <div className="flex items-center gap-2">
+      <span className="text-sm font-bold text-black/60">Trade Date</span>
+
+      <input
+        type="date"
+        value={tradeDateFrom}
+        onChange={(e) => setTradeDateFrom(e.target.value)}
+        className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold"
+      />
+
+      <span className="text-black/50">→</span>
+
+      <input
+        type="date"
+        value={tradeDateTo}
+        onChange={(e) => setTradeDateTo(e.target.value)}
+        className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold"
+      />
+    </div>
+
+    {/* PRESETS */}
+    <div className="flex items-center gap-2 ml-4">
+
+{(() => {
+  const today = toLocalISO(new Date())
+
+  return (
+    <button
+      onClick={() => setDateRange(today, today)}
+      className={presetClass(isPresetActive(today, today))}
+    >
+      Today
+    </button>
+  )
+})()}
+
+{(() => {
+  const to = new Date()
+  const from = new Date()
+  from.setDate(to.getDate() - 7)
+
+  const fromISO = toLocalISO(from)
+  const toISO = toLocalISO(to)
+
+  return (
+    <button
+      onClick={() => setDateRange(fromISO, toISO)}
+      className={presetClass(isPresetActive(fromISO, toISO))}
+    >
+      7D
+    </button>
+  )
+})()}
+
+{(() => {
+  const to = new Date()
+  const from = new Date()
+  from.setDate(to.getDate() - 30)
+
+  const fromISO = toLocalISO(from)
+  const toISO = toLocalISO(to)
+
+  return (
+    <button
+      onClick={() => setDateRange(fromISO, toISO)}
+      className={presetClass(isPresetActive(fromISO, toISO))}
+    >
+      30D
+    </button>
+  )
+})()}
+
+{(() => {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), 1)
+
+  const fromISO = toLocalISO(start)
+  const toISO = toLocalISO(now)
+
+  return (
+    <button
+      onClick={() => setDateRange(fromISO, toISO)}
+      className={presetClass(isPresetActive(fromISO, toISO))}
+    >
+      Current Month
+    </button>
+  )
+})()}
+
+{(() => {
+  const now = new Date()
+  const q = Math.floor(now.getMonth() / 3) * 3
+  const start = new Date(now.getFullYear(), q, 1)
+
+  const fromISO = toLocalISO(start)
+  const toISO = toLocalISO(now)
+
+  return (
+    <button
+      onClick={() => setDateRange(fromISO, toISO)}
+      className={presetClass(isPresetActive(fromISO, toISO))}
+    >
+      Current Quarter
+    </button>
+  )
+})()}
+
+{(() => {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), 0, 1)
+
+  const fromISO = toLocalISO(start)
+  const toISO = toLocalISO(now)
+
+  return (
+    <button
+      onClick={() => setDateRange(fromISO, toISO)}
+      className={presetClass(isPresetActive(fromISO, toISO))}
+    >
+      YTD
+    </button>
+  )
+})()}
+
+<button
+  onClick={() => setDateRange("", "")}
+  className={presetClass(tradeDateFrom === "" && tradeDateTo === "")}
+>
+  All
+</button>
+
+    </div>
+
+  </div>
+
+</div>
       </div>
 
       <div className="rounded-2xl border border-black/10 overflow-hidden relative">
