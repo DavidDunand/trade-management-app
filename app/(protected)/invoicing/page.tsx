@@ -41,18 +41,29 @@ type InvoiceRecord = {
   created_at: string;
 };
 
-type RetroPaymentRecord = {
-  id: string;
-  trade_id: string;
-  payment_status: RetroStatus;
-  created_at: string;
-};
-
 type RetroStatus =
   | "invoice_not_received"
   | "invoice_received"
   | "invoice_pending_amendment"
   | "payment_approved";
+
+type RetroPaymentRecord = {
+  id: string;
+  trade_id: string;
+  recipient_type: "client" | "introducer";
+  payment_status: RetroStatus;
+  created_at: string;
+};
+
+// One expanded row per recipient (client OR introducer)
+type PayableRow = {
+  key: string; // `${trade.id}:client` or `${trade.id}:introducer`
+  trade: TradeRow;
+  recipientType: "client" | "introducer";
+  recipientName: string | null;
+  retroPct: number | null;  // retro_client_input or retro_introducer_input
+  retroAmt: number | null;  // retro_client or retro_introducer
+};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -61,31 +72,26 @@ const BOOKING_ENTITY = "RiverRock Securities SAS, France";
 const RETRO_STATUS_OPTIONS: {
   value: RetroStatus;
   label: string;
-  color: string;
   selectColor: string;
 }[] = [
   {
     value: "invoice_not_received",
     label: "Invoice not received",
-    color: "bg-red-100 text-red-700",
     selectColor: "bg-red-50 border-red-300 text-red-700",
   },
   {
     value: "invoice_received",
     label: "Invoice received",
-    color: "bg-blue-100 text-blue-700",
     selectColor: "bg-blue-50 border-blue-300 text-blue-700",
   },
   {
     value: "invoice_pending_amendment",
     label: "Invoice pending amendment",
-    color: "bg-amber-100 text-amber-700",
     selectColor: "bg-amber-50 border-amber-300 text-amber-700",
   },
   {
     value: "payment_approved",
     label: "Payment approved",
-    color: "bg-emerald-100 text-emerald-700",
     selectColor: "bg-emerald-50 border-emerald-300 text-emerald-700",
   },
 ];
@@ -125,6 +131,31 @@ function he(v: unknown) {
     .replaceAll('"', "&quot;");
 }
 
+// Formats a Map<currency, amount> into multi-line JSX
+function CcyBreakdown({ map }: { map: Map<string, number> }) {
+  if (map.size === 0) return <span className="text-2xl font-bold">—</span>;
+  const entries = Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+  if (entries.length === 1) {
+    const [ccy, amt] = entries[0];
+    return (
+      <div>
+        <span className="text-2xl font-bold">{formatNumber(amt)}</span>
+        <span className="text-sm font-bold ml-1.5 opacity-60">{ccy}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-0.5">
+      {entries.map(([ccy, amt]) => (
+        <div key={ccy} className="flex items-baseline gap-1.5">
+          <span className="text-xl font-bold">{formatNumber(amt)}</span>
+          <span className="text-[11px] font-bold opacity-60">{ccy}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Invoice PDF generator ────────────────────────────────────────────────────
 
 function generateInvoicePdf(trade: TradeRow) {
@@ -148,65 +179,39 @@ function generateInvoicePdf(trade: TradeRow) {
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #111; padding: 48px; background: #fff; }
-
     .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 36px; }
     .company-name { font-size: 20px; font-weight: 700; color: #002651; }
     .company-sub { font-size: 10px; color: #888; margin-top: 6px; line-height: 1.6; }
-
     .invoice-title h1 { font-size: 32px; font-weight: 700; color: #002651; text-align: right; }
     .invoice-meta { text-align: right; margin-top: 6px; font-size: 11px; color: #555; line-height: 1.8; }
-
     .divider { border: none; border-top: 2px solid #002651; margin: 24px 0; }
-
     .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin-bottom: 32px; }
     .party-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #999; margin-bottom: 8px; }
     .party-name { font-size: 13px; font-weight: 700; color: #111; }
     .party-detail { font-size: 10px; color: #666; margin-top: 5px; line-height: 1.7; }
-
     table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
-    thead th {
-      background: #002651; color: #fff;
-      padding: 10px 14px; text-align: left;
-      font-size: 10px; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.06em;
-    }
+    thead th { background: #002651; color: #fff; padding: 10px 14px; text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
     thead th.num { text-align: right; }
     tbody tr:nth-child(even) { background: #f0f4fa; }
     tbody td { padding: 10px 14px; font-size: 12px; border-bottom: 1px solid #e8e8e8; vertical-align: middle; }
     tbody td.num { text-align: right; font-weight: 700; }
-
     .total-section { margin-left: auto; width: 320px; }
     .total-row { display: flex; justify-content: space-between; padding: 8px 14px; font-size: 12px; }
     .total-row.final { background: #002651; color: #fff; font-size: 14px; font-weight: 700; border-radius: 6px; margin-top: 4px; }
-
-    .banking {
-      margin-top: 36px; padding: 20px 24px;
-      background: #f8f9fc; border-left: 4px solid #002651;
-      border-radius: 0 8px 8px 0;
-    }
+    .banking { margin-top: 36px; padding: 20px 24px; background: #f8f9fc; border-left: 4px solid #002651; border-radius: 0 8px 8px 0; }
     .banking-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #888; margin-bottom: 14px; }
     .banking-grid { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; }
     .bk { font-size: 11px; font-weight: 700; color: #555; }
     .bv { font-size: 11px; color: #111; }
-
     .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #e0e0e0; font-size: 9px; color: #bbb; text-align: center; line-height: 1.6; }
-
-    @media print {
-      body { padding: 24px; }
-      @page { margin: 1.5cm; }
-    }
+    @media print { body { padding: 24px; } @page { margin: 1.5cm; } }
   </style>
 </head>
 <body>
-
   <div class="header">
     <div>
       <div class="company-name">RiverRock Securities SAS</div>
-      <div class="company-sub">
-        [Dealer Address — Line 1]<br />
-        [City, Postcode, Country]<br />
-        [VAT / Registration No.]
-      </div>
+      <div class="company-sub">[Dealer Address — Line 1]<br />[City, Postcode, Country]<br />[VAT / Registration No.]</div>
     </div>
     <div class="invoice-title">
       <h1>INVOICE</h1>
@@ -217,72 +222,42 @@ function generateInvoicePdf(trade: TradeRow) {
       </div>
     </div>
   </div>
-
   <hr class="divider" />
-
   <div class="parties">
     <div>
       <div class="party-label">From</div>
       <div class="party-name">RiverRock Securities SAS, France</div>
-      <div class="party-detail">
-        [Dealer Address — to be completed]<br />
-        [City, Postcode, Country]<br />
-        [VAT No. — to be completed]
-      </div>
+      <div class="party-detail">[Dealer Address — to be completed]<br />[City, Postcode, Country]<br />[VAT No. — to be completed]</div>
     </div>
     <div>
       <div class="party-label">Bill To</div>
       <div class="party-name">${he(issuer)}</div>
-      <div class="party-detail">
-        [Counterparty address — to be completed]
-      </div>
+      <div class="party-detail">[Counterparty address — to be completed]</div>
     </div>
   </div>
-
   <table>
     <thead>
       <tr>
-        <th>Reference</th>
-        <th>ISIN</th>
-        <th>Product</th>
-        <th>Issuer</th>
-        <th>Trade Date</th>
-        <th>Value Date</th>
-        <th>CCY</th>
-        <th class="num">Size</th>
-        <th class="num">Gross Fees</th>
+        <th>Reference</th><th>ISIN</th><th>Product</th><th>Issuer</th>
+        <th>Trade Date</th><th>Value Date</th><th>CCY</th>
+        <th class="num">Size</th><th class="num">Gross Fees</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td>${he(ref)}</td>
-        <td><strong>${he(isin)}</strong></td>
-        <td>${he(product)}</td>
-        <td>${he(issuer)}</td>
-        <td>${he(tradeDate)}</td>
-        <td>${he(valueDate)}</td>
+        <td>${he(ref)}</td><td><strong>${he(isin)}</strong></td>
+        <td>${he(product)}</td><td>${he(issuer)}</td>
+        <td>${he(tradeDate)}</td><td>${he(valueDate)}</td>
         <td><strong>${he(ccy)}</strong></td>
-        <td class="num">${he(size)}</td>
-        <td class="num">${he(grossFees)}</td>
+        <td class="num">${he(size)}</td><td class="num">${he(grossFees)}</td>
       </tr>
     </tbody>
   </table>
-
   <div class="total-section">
-    <div class="total-row">
-      <span>Subtotal</span>
-      <span>${he(grossFees)} ${he(ccy)}</span>
-    </div>
-    <div class="total-row">
-      <span>VAT (0%)</span>
-      <span>0.00 ${he(ccy)}</span>
-    </div>
-    <div class="total-row final">
-      <span>Total Due</span>
-      <span>${he(grossFees)} ${he(ccy)}</span>
-    </div>
+    <div class="total-row"><span>Subtotal</span><span>${he(grossFees)} ${he(ccy)}</span></div>
+    <div class="total-row"><span>VAT (0%)</span><span>0.00 ${he(ccy)}</span></div>
+    <div class="total-row final"><span>Total Due</span><span>${he(grossFees)} ${he(ccy)}</span></div>
   </div>
-
   <div class="banking">
     <div class="banking-label">Payment Instructions — RiverRock Securities SAS</div>
     <div class="banking-grid">
@@ -293,12 +268,10 @@ function generateInvoicePdf(trade: TradeRow) {
       <span class="bk">Payment Ref.:</span><span class="bv">${he(invoiceNumber)}</span>
     </div>
   </div>
-
   <div class="footer">
     Generated by Valeur Europe Trade Management System on ${he(today)}.<br />
     Please ensure payment is made quoting the invoice reference above.
   </div>
-
 </body>
 </html>`;
 
@@ -331,41 +304,48 @@ function InvoiceStatusBadge({ status }: { status: "pending" | "paid" }) {
 
 function SummaryCard({
   label,
-  value,
+  children,
   sub,
   colorClass,
 }: {
   label: string;
-  value: string;
+  children: React.ReactNode;
   sub: string;
   colorClass?: string;
 }) {
   return (
     <div className={`rounded-2xl border p-5 shadow-sm ${colorClass ?? "border-black/8 bg-white"}`}>
-      <div className="text-[10px] font-bold uppercase tracking-widest opacity-60">{label}</div>
-      <div className="text-2xl font-bold mt-1.5">{value}</div>
-      <div className="text-[11px] mt-1 opacity-60">{sub}</div>
+      <div className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-2">{label}</div>
+      {children}
+      <div className="text-[11px] mt-1.5 opacity-60">{sub}</div>
     </div>
   );
 }
 
+// MultiSelectFilter with built-in search bar
 function MultiSelectFilter({
   label,
   options,
   selected,
   onChange,
+  searchable,
 }: {
   label: string;
   options: string[];
   selected: string[];
   onChange: (v: string[]) => void;
+  searchable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const ref = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearch("");
+      }
     }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -373,6 +353,10 @@ function MultiSelectFilter({
 
   const toggle = (v: string) =>
     onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
+
+  const filteredOptions = searchable && search
+    ? options.filter((o) => o.toLowerCase().includes(search.toLowerCase()))
+    : options;
 
   const active = selected.length > 0;
 
@@ -392,34 +376,56 @@ function MultiSelectFilter({
         )}
       </button>
       {open && (
-        <div className="absolute z-50 top-full mt-1 left-0 min-w-[200px] max-h-64 overflow-y-auto rounded-xl border border-black/10 bg-white shadow-xl">
+        <div className="absolute z-50 top-full mt-1 left-0 min-w-[220px] rounded-xl border border-black/10 bg-white shadow-xl overflow-hidden">
+          {/* Select all / Clear */}
           <div className="flex items-center justify-between px-3 py-2 border-b border-black/8 text-xs">
-            <button className="font-bold text-black/50 hover:text-black" onClick={() => onChange([...options])}>
+            <button
+              className="font-bold text-black/50 hover:text-black"
+              onClick={() => onChange([...options])}
+            >
               Select all
             </button>
-            <button className="font-bold text-black/50 hover:text-black" onClick={() => onChange([])}>
+            <button
+              className="font-bold text-black/50 hover:text-black"
+              onClick={() => onChange([])}
+            >
               Clear
             </button>
           </div>
-          {options.length === 0 && (
-            <div className="px-3 py-3 text-xs text-black/40">No options</div>
-          )}
-          {options.map((o) => (
-            <label
-              key={o}
-              className={`flex items-center gap-2 px-3 py-2 text-[13px] cursor-pointer ${
-                selected.includes(o) ? "bg-blue-50 font-bold" : "hover:bg-black/4"
-              }`}
-            >
+          {/* Search bar */}
+          {searchable && (
+            <div className="px-2 py-2 border-b border-black/8">
               <input
-                type="checkbox"
-                checked={selected.includes(o)}
-                onChange={() => toggle(o)}
-                className="accent-[#002651]"
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search…"
+                className="w-full rounded-lg border border-black/15 px-2.5 py-1.5 text-xs font-medium outline-none focus:border-[#002651]"
               />
-              <span className="truncate">{o}</span>
-            </label>
-          ))}
+            </div>
+          )}
+          {/* Options list */}
+          <div className="max-h-56 overflow-y-auto">
+            {filteredOptions.length === 0 && (
+              <div className="px-3 py-3 text-xs text-black/40">No matches</div>
+            )}
+            {filteredOptions.map((o) => (
+              <label
+                key={o}
+                className={`flex items-center gap-2 px-3 py-2 text-[13px] cursor-pointer ${
+                  selected.includes(o) ? "bg-blue-50 font-bold" : "hover:bg-black/4"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(o)}
+                  onChange={() => toggle(o)}
+                  className="accent-[#002651]"
+                />
+                <span className="truncate">{o}</span>
+              </label>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -432,6 +438,7 @@ export default function InvoicingPage() {
   const [tab, setTab] = useState<"receivables" | "payables">("receivables");
   const [trades, setTrades] = useState<TradeRow[]>([]);
   const [invoiceMap, setInvoiceMap] = useState<Map<string, InvoiceRecord>>(new Map());
+  // Key: `${trade_id}:client` or `${trade_id}:introducer`
   const [retroMap, setRetroMap] = useState<Map<string, RetroPaymentRecord>>(new Map());
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
@@ -498,7 +505,7 @@ export default function InvoicingPage() {
           .in("trade_id", tradeIds),
         supabase
           .from("retro_payments")
-          .select("id, trade_id, payment_status, created_at")
+          .select("id, trade_id, recipient_type, payment_status, created_at")
           .in("trade_id", tradeIds),
       ]);
 
@@ -506,8 +513,11 @@ export default function InvoicingPage() {
       for (const r of invData ?? []) imap.set(r.trade_id, r as InvoiceRecord);
       setInvoiceMap(imap);
 
+      // Key: `${trade_id}:${recipient_type}`
       const rmap = new Map<string, RetroPaymentRecord>();
-      for (const r of retroData ?? []) rmap.set(r.trade_id, r as RetroPaymentRecord);
+      for (const r of retroData ?? []) {
+        rmap.set(`${r.trade_id}:${r.recipient_type}`, r as RetroPaymentRecord);
+      }
       setRetroMap(rmap);
     } catch (err) {
       console.error("Invoicing fetch error:", err);
@@ -542,7 +552,35 @@ export default function InvoicingPage() {
     [trades]
   );
 
-  // Filter option lists
+  // Expand trades → one PayableRow per recipient
+  const payableRows = useMemo<PayableRow[]>(() => {
+    const rows: PayableRow[] = [];
+    for (const t of payableTrades) {
+      if (Number(t.retro_client ?? 0) > 0) {
+        rows.push({
+          key: `${t.id}:client`,
+          trade: t,
+          recipientType: "client",
+          recipientName: t.client_name,
+          retroPct: t.retro_client_input,
+          retroAmt: t.retro_client,
+        });
+      }
+      if (Number(t.retro_introducer ?? 0) > 0) {
+        rows.push({
+          key: `${t.id}:introducer`,
+          trade: t,
+          recipientType: "introducer",
+          recipientName: t.introducer_name,
+          retroPct: t.retro_introducer_input,
+          retroAmt: t.retro_introducer,
+        });
+      }
+    }
+    return rows;
+  }, [payableTrades]);
+
+  // Filter option lists — receivables
   const recvIssuerOptions = useMemo(
     () =>
       [...new Set(receivableTrades.map((t) => t.product?.issuer?.legal_name).filter(Boolean))] as string[],
@@ -553,14 +591,31 @@ export default function InvoicingPage() {
       [...new Set(receivableTrades.map((t) => t.product?.currency).filter(Boolean))] as string[],
     [receivableTrades]
   );
+
+  // Filter option lists — payables (from expanded rows)
   const payClientOptions = useMemo(
-    () => [...new Set(payableTrades.map((t) => t.client_name).filter(Boolean))] as string[],
-    [payableTrades]
+    () =>
+      [
+        ...new Set(
+          payableRows
+            .filter((r) => r.recipientType === "client")
+            .map((r) => r.recipientName)
+            .filter(Boolean)
+        ),
+      ] as string[],
+    [payableRows]
   );
   const payIntroducerOptions = useMemo(
     () =>
-      [...new Set(payableTrades.map((t) => t.introducer_name).filter(Boolean))] as string[],
-    [payableTrades]
+      [
+        ...new Set(
+          payableRows
+            .filter((r) => r.recipientType === "introducer")
+            .map((r) => r.recipientName)
+            .filter(Boolean)
+        ),
+      ] as string[],
+    [payableRows]
   );
 
   // Filtered receivables
@@ -579,20 +634,22 @@ export default function InvoicingPage() {
     });
   }, [receivableTrades, invoiceMap, recvStatusFilter, recvIssuerFilter, recvCcyFilter, recvIsinFilter, recvTradeDateFrom, recvTradeDateTo, recvValueDateFrom, recvValueDateTo]);
 
-  // Filtered payables
-  const filteredPayables = useMemo(() => {
-    return payableTrades.filter((t) => {
-      const status = retroMap.get(t.id)?.payment_status ?? "invoice_not_received";
-      if (payClientFilter.length && !payClientFilter.includes(t.client_name ?? "")) return false;
-      if (payIntroducerFilter.length && !payIntroducerFilter.includes(t.introducer_name ?? "")) return false;
-      if (payIsinFilter && !(t.product?.isin ?? "").toLowerCase().includes(payIsinFilter.toLowerCase())) return false;
-      if (payTradeStatusFilter !== "all" && (t.status ?? "") !== payTradeStatusFilter) return false;
+  // Filtered payable rows (per-recipient)
+  const filteredPayableRows = useMemo(() => {
+    return payableRows.filter((r) => {
+      const status = retroMap.get(r.key)?.payment_status ?? "invoice_not_received";
+      // Client filter applies only to client-type rows
+      if (payClientFilter.length && r.recipientType === "client" && !payClientFilter.includes(r.recipientName ?? "")) return false;
+      // Introducer filter applies only to introducer-type rows
+      if (payIntroducerFilter.length && r.recipientType === "introducer" && !payIntroducerFilter.includes(r.recipientName ?? "")) return false;
+      if (payIsinFilter && !(r.trade.product?.isin ?? "").toLowerCase().includes(payIsinFilter.toLowerCase())) return false;
+      if (payTradeStatusFilter !== "all" && (r.trade.status ?? "") !== payTradeStatusFilter) return false;
       if (payPaymentStatusFilter !== "all" && status !== payPaymentStatusFilter) return false;
-      if (payDateFrom && (t.trade_date ?? "") < payDateFrom) return false;
-      if (payDateTo && (t.trade_date ?? "") > payDateTo) return false;
+      if (payDateFrom && (r.trade.trade_date ?? "") < payDateFrom) return false;
+      if (payDateTo && (r.trade.trade_date ?? "") > payDateTo) return false;
       return true;
     });
-  }, [payableTrades, retroMap, payClientFilter, payIntroducerFilter, payIsinFilter, payTradeStatusFilter, payPaymentStatusFilter, payDateFrom, payDateTo]);
+  }, [payableRows, retroMap, payClientFilter, payIntroducerFilter, payIsinFilter, payTradeStatusFilter, payPaymentStatusFilter, payDateFrom, payDateTo]);
 
   // Summary totals — receivables
   const recvTotals = useMemo(() => {
@@ -611,21 +668,29 @@ export default function InvoicingPage() {
     };
   }, [filteredReceivables, invoiceMap]);
 
-  // Summary totals — payables
+  // Summary totals — payables, grouped by currency
   const payTotals = useMemo(() => {
-    const totalClient = filteredPayables.reduce((s, t) => s + Number(t.retro_client ?? 0), 0);
-    const totalIntroducer = filteredPayables.reduce(
-      (s, t) => s + Number(t.retro_introducer ?? 0),
-      0
-    );
-    return {
-      total: totalClient + totalIntroducer,
-      totalClient,
-      totalIntroducer,
-      clientCount: filteredPayables.filter((t) => Number(t.retro_client ?? 0) > 0).length,
-      introducerCount: filteredPayables.filter((t) => Number(t.retro_introducer ?? 0) > 0).length,
-    };
-  }, [filteredPayables]);
+    const owedByCcy = new Map<string, number>();
+    const paidByCcy = new Map<string, number>();
+    let owedCount = 0;
+    let paidCount = 0;
+
+    for (const r of filteredPayableRows) {
+      const status = retroMap.get(r.key)?.payment_status ?? "invoice_not_received";
+      const ccy = r.trade.product?.currency ?? "?";
+      const amt = Number(r.retroAmt ?? 0);
+
+      if (status === "payment_approved") {
+        paidByCcy.set(ccy, (paidByCcy.get(ccy) ?? 0) + amt);
+        paidCount++;
+      } else {
+        owedByCcy.set(ccy, (owedByCcy.get(ccy) ?? 0) + amt);
+        owedCount++;
+      }
+    }
+
+    return { owedByCcy, paidByCcy, owedCount, paidCount };
+  }, [filteredPayableRows, retroMap]);
 
   // ─── Actions ──────────────────────────────────────────────────────────────
 
@@ -636,10 +701,7 @@ export default function InvoicingPage() {
     const now = new Date().toISOString();
 
     if (existing) {
-      await supabase
-        .from("invoices")
-        .update({ downloaded_at: now })
-        .eq("id", existing.id);
+      await supabase.from("invoices").update({ downloaded_at: now }).eq("id", existing.id);
       setInvoiceMap((prev) => {
         const next = new Map(prev);
         next.set(trade.id, { ...existing, downloaded_at: now });
@@ -690,8 +752,8 @@ export default function InvoicingPage() {
     showToast(`Invoice status → ${next}`);
   }
 
-  async function updateRetroStatus(trade: TradeRow, newStatus: RetroStatus) {
-    const existing = retroMap.get(trade.id);
+  async function updateRetroStatus(row: PayableRow, newStatus: RetroStatus) {
+    const existing = retroMap.get(row.key);
 
     if (existing) {
       await supabase
@@ -700,19 +762,23 @@ export default function InvoicingPage() {
         .eq("id", existing.id);
       setRetroMap((prev) => {
         const m = new Map(prev);
-        m.set(trade.id, { ...existing, payment_status: newStatus });
+        m.set(row.key, { ...existing, payment_status: newStatus });
         return m;
       });
     } else {
       const { data } = await supabase
         .from("retro_payments")
-        .insert({ trade_id: trade.id, payment_status: newStatus })
+        .insert({
+          trade_id: row.trade.id,
+          recipient_type: row.recipientType,
+          payment_status: newStatus,
+        })
         .select()
         .single();
       if (data) {
         setRetroMap((prev) => {
           const m = new Map(prev);
-          m.set(trade.id, data as RetroPaymentRecord);
+          m.set(row.key, data as RetroPaymentRecord);
           return m;
         });
       }
@@ -742,8 +808,7 @@ export default function InvoicingPage() {
     </th>
   );
 
-  const rowBg = (i: number) =>
-    i % 2 === 0 ? "bg-[#DEE7F0]/50" : "bg-white";
+  const rowBg = (i: number) => (i % 2 === 0 ? "bg-[#DEE7F0]/50" : "bg-white");
 
   const filterInput = (
     value: string,
@@ -811,22 +876,25 @@ export default function InvoicingPage() {
           <div className="grid grid-cols-3 gap-4">
             <SummaryCard
               label="Total Gross Fees"
-              value={formatNumber(recvTotals.total)}
               sub={`${filteredReceivables.length} trade${filteredReceivables.length !== 1 ? "s" : ""}`}
               colorClass="border-black/8 bg-white text-black"
-            />
+            >
+              <div className="text-2xl font-bold">{formatNumber(recvTotals.total)}</div>
+            </SummaryCard>
             <SummaryCard
               label="Outstanding"
-              value={formatNumber(recvTotals.outstanding)}
               sub={`${recvTotals.pendingCount} pending`}
               colorClass="border-amber-200 bg-amber-50 text-amber-700"
-            />
+            >
+              <div className="text-2xl font-bold">{formatNumber(recvTotals.outstanding)}</div>
+            </SummaryCard>
             <SummaryCard
               label="Paid"
-              value={formatNumber(recvTotals.paid)}
               sub={`${recvTotals.paidCount} invoices paid`}
               colorClass="border-emerald-200 bg-emerald-50 text-emerald-700"
-            />
+            >
+              <div className="text-2xl font-bold">{formatNumber(recvTotals.paid)}</div>
+            </SummaryCard>
           </div>
 
           {/* Filters */}
@@ -854,24 +922,13 @@ export default function InvoicingPage() {
                 <option value="pending">Pending</option>
                 <option value="paid">Paid</option>
               </select>
-              {(recvIsinFilter ||
-                recvIssuerFilter.length ||
-                recvCcyFilter.length ||
-                recvStatusFilter !== "all" ||
-                recvTradeDateFrom ||
-                recvTradeDateTo ||
-                recvValueDateFrom ||
-                recvValueDateTo) && (
+              {(recvIsinFilter || recvIssuerFilter.length || recvCcyFilter.length || recvStatusFilter !== "all" || recvTradeDateFrom || recvTradeDateTo || recvValueDateFrom || recvValueDateTo) && (
                 <button
                   onClick={() => {
-                    setRecvIsinFilter("");
-                    setRecvIssuerFilter([]);
-                    setRecvCcyFilter([]);
+                    setRecvIsinFilter(""); setRecvIssuerFilter([]); setRecvCcyFilter([]);
                     setRecvStatusFilter("all");
-                    setRecvTradeDateFrom("");
-                    setRecvTradeDateTo("");
-                    setRecvValueDateFrom("");
-                    setRecvValueDateTo("");
+                    setRecvTradeDateFrom(""); setRecvTradeDateTo("");
+                    setRecvValueDateFrom(""); setRecvValueDateTo("");
                   }}
                   className="text-xs font-bold text-black/40 hover:text-black underline"
                 >
@@ -935,32 +992,19 @@ export default function InvoicingPage() {
                         <td className="px-4 py-3 text-[12px] max-w-[160px] truncate" title={t.product?.issuer?.legal_name ?? ""}>
                           {t.product?.issuer?.legal_name ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-[12px] font-mono">
-                          {t.product?.isin ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 text-[12px] whitespace-nowrap">
-                          {formatDate(t.trade_date)}
-                        </td>
-                        <td className="px-4 py-3 text-[12px] whitespace-nowrap">
-                          {formatDate(t.value_date)}
-                        </td>
+                        <td className="px-4 py-3 text-[12px] font-mono">{t.product?.isin ?? "—"}</td>
+                        <td className="px-4 py-3 text-[12px] whitespace-nowrap">{formatDate(t.trade_date)}</td>
+                        <td className="px-4 py-3 text-[12px] whitespace-nowrap">{formatDate(t.value_date)}</td>
                         <td className="px-4 py-3 text-[12px] max-w-[180px] truncate" title={t.product?.product_name ?? ""}>
                           {t.product?.product_name ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-[12px] font-bold">
-                          {t.product?.currency ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 text-[12px] text-right font-mono">
-                          {formatNumber(t.total_size)}
-                        </td>
+                        <td className="px-4 py-3 text-[12px] font-bold">{t.product?.currency ?? "—"}</td>
+                        <td className="px-4 py-3 text-[12px] text-right font-mono">{formatNumber(t.total_size)}</td>
                         <td className="px-4 py-3 text-[12px] text-right font-mono font-bold text-emerald-700">
                           {formatNumber(t.pnl_trade_ccy)}
                         </td>
                         <td className="px-4 py-3">
-                          <button
-                            onClick={() => togglePaymentStatus(t)}
-                            title="Click to toggle payment status"
-                          >
+                          <button onClick={() => togglePaymentStatus(t)} title="Click to toggle payment status">
                             <InvoiceStatusBadge status={status} />
                           </button>
                         </td>
@@ -1001,26 +1045,22 @@ export default function InvoicingPage() {
       {tab === "payables" && (
         <div className="space-y-5">
 
-          {/* Summary cards */}
-          <div className="grid grid-cols-3 gap-4">
+          {/* Summary cards — 2 cards, grouped by currency */}
+          <div className="grid grid-cols-2 gap-4">
             <SummaryCard
               label="Total Retros Owed"
-              value={formatNumber(payTotals.total)}
-              sub={`${filteredPayables.length} trade${filteredPayables.length !== 1 ? "s" : ""}`}
-              colorClass="border-black/8 bg-white text-black"
-            />
+              sub={`${payTotals.owedCount} recipient${payTotals.owedCount !== 1 ? "s" : ""} · payment not yet approved`}
+              colorClass="border-amber-200 bg-amber-50 text-amber-700"
+            >
+              <CcyBreakdown map={payTotals.owedByCcy} />
+            </SummaryCard>
             <SummaryCard
-              label="Client Retros"
-              value={formatNumber(payTotals.totalClient)}
-              sub={`${payTotals.clientCount} trades`}
-              colorClass="border-blue-200 bg-blue-50 text-blue-700"
-            />
-            <SummaryCard
-              label="Introducer Retros"
-              value={formatNumber(payTotals.totalIntroducer)}
-              sub={`${payTotals.introducerCount} trades`}
-              colorClass="border-purple-200 bg-purple-50 text-purple-700"
-            />
+              label="Total Retros Paid"
+              sub={`${payTotals.paidCount} recipient${payTotals.paidCount !== 1 ? "s" : ""} · payment approved`}
+              colorClass="border-emerald-200 bg-emerald-50 text-emerald-700"
+            >
+              <CcyBreakdown map={payTotals.paidByCcy} />
+            </SummaryCard>
           </div>
 
           {/* Filters */}
@@ -1032,12 +1072,14 @@ export default function InvoicingPage() {
                 options={payClientOptions}
                 selected={payClientFilter}
                 onChange={setPayClientFilter}
+                searchable
               />
               <MultiSelectFilter
                 label="Introducer"
                 options={payIntroducerOptions}
                 selected={payIntroducerFilter}
                 onChange={setPayIntroducerFilter}
+                searchable
               />
               <select
                 value={payTradeStatusFilter}
@@ -1055,27 +1097,15 @@ export default function InvoicingPage() {
               >
                 <option value="all">All payment statuses</option>
                 {RETRO_STATUS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
+                  <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
-              {(payIsinFilter ||
-                payClientFilter.length ||
-                payIntroducerFilter.length ||
-                payTradeStatusFilter !== "all" ||
-                payPaymentStatusFilter !== "all" ||
-                payDateFrom ||
-                payDateTo) && (
+              {(payIsinFilter || payClientFilter.length || payIntroducerFilter.length || payTradeStatusFilter !== "all" || payPaymentStatusFilter !== "all" || payDateFrom || payDateTo) && (
                 <button
                   onClick={() => {
-                    setPayIsinFilter("");
-                    setPayClientFilter([]);
-                    setPayIntroducerFilter([]);
-                    setPayTradeStatusFilter("all");
-                    setPayPaymentStatusFilter("all");
-                    setPayDateFrom("");
-                    setPayDateTo("");
+                    setPayIsinFilter(""); setPayClientFilter([]); setPayIntroducerFilter([]);
+                    setPayTradeStatusFilter("all"); setPayPaymentStatusFilter("all");
+                    setPayDateFrom(""); setPayDateTo("");
                   }}
                   className="text-xs font-bold text-black/40 hover:text-black underline"
                 >
@@ -1099,113 +1129,93 @@ export default function InvoicingPage() {
                   <tr>
                     <TH>ISIN</TH>
                     <TH>Issue Date</TH>
-                    <TH>Client Name</TH>
-                    <TH>Introducer</TH>
+                    <TH>Recipient Name</TH>
+                    <TH>Recipient Type</TH>
                     <TH right>Size</TH>
-                    <TH right>Retro Client %</TH>
-                    <TH right>Retro Client Amt</TH>
-                    <TH right>Retro Intro %</TH>
-                    <TH right>Retro Intro Amt</TH>
+                    <TH right>Retro %</TH>
+                    <TH right>Retro Amt</TH>
                     <TH>Trade Status</TH>
                     <TH>Payment Status</TH>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredPayables.length === 0 && (
+                  {filteredPayableRows.length === 0 && (
                     <tr>
-                      <td colSpan={11} className="text-center py-14 text-black/30 text-sm">
+                      <td colSpan={9} className="text-center py-14 text-black/30 text-sm">
                         No payables match your filters.
                       </td>
                     </tr>
                   )}
-                  {filteredPayables.map((t, i) => {
-                    const rp = retroMap.get(t.id);
-                    const payStatus: RetroStatus =
-                      rp?.payment_status ?? "invoice_not_received";
-                    const ccy = t.product?.currency ?? "";
-                    const settlement = t.product?.settlement;
-                    const hasClientRetro = Number(t.retro_client ?? 0) > 0;
-                    const hasIntroRetro = Number(t.retro_introducer ?? 0) > 0;
+                  {filteredPayableRows.map((r, i) => {
+                    const status = retroMap.get(r.key)?.payment_status ?? "invoice_not_received";
+                    const ccy = r.trade.product?.currency ?? "";
+                    const settlement = r.trade.product?.settlement;
 
                     const selectColorClass =
-                      RETRO_STATUS_OPTIONS.find((o) => o.value === payStatus)?.selectColor ??
+                      RETRO_STATUS_OPTIONS.find((o) => o.value === status)?.selectColor ??
                       "border-black/20";
 
                     return (
                       <tr
-                        key={t.id}
+                        key={r.key}
                         className={`border-t border-black/5 ${rowBg(i)} hover:bg-blue-50/60 transition-colors`}
                       >
                         <td className="px-4 py-3 text-[12px] font-mono">
-                          {t.product?.isin ?? "—"}
+                          {r.trade.product?.isin ?? "—"}
                         </td>
                         <td className="px-4 py-3 text-[12px] whitespace-nowrap">
-                          {formatDate(t.trade_date)}
+                          {formatDate(r.trade.trade_date)}
                         </td>
                         <td className="px-4 py-3 text-[12px] font-bold">
-                          {t.client_name ?? "—"}
+                          {r.recipientName ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-[12px]">
-                          {t.introducer_name ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 text-[12px] text-right font-mono">
-                          {formatNumber(t.total_size)}
-                        </td>
-                        {/* Retro Client % */}
-                        <td className="px-4 py-3 text-[12px] text-right">
-                          {hasClientRetro
-                            ? settlement === "percent"
-                              ? `${fmt2(t.retro_client_input)}%`
-                              : `${fmt2(t.retro_client_input)} ${ccy}/unit`
-                            : "—"}
-                        </td>
-                        {/* Retro Client Amt */}
-                        <td className="px-4 py-3 text-[12px] text-right font-mono font-bold text-blue-700">
-                          {hasClientRetro
-                            ? `${formatNumber(t.retro_client)} ${ccy}`
-                            : "—"}
-                        </td>
-                        {/* Retro Intro % */}
-                        <td className="px-4 py-3 text-[12px] text-right">
-                          {hasIntroRetro
-                            ? settlement === "percent"
-                              ? `${fmt2(t.retro_introducer_input)}%`
-                              : `${fmt2(t.retro_introducer_input)} ${ccy}/unit`
-                            : "—"}
-                        </td>
-                        {/* Retro Intro Amt */}
-                        <td className="px-4 py-3 text-[12px] text-right font-mono font-bold text-purple-700">
-                          {hasIntroRetro
-                            ? `${formatNumber(t.retro_introducer)} ${ccy}`
-                            : "—"}
-                        </td>
-                        {/* Trade Status */}
                         <td className="px-4 py-3">
                           <span
                             className={`inline-flex rounded-full text-[11px] font-bold px-2 py-0.5 ${
-                              t.status === "booked"
+                              r.recipientType === "client"
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-purple-100 text-purple-700"
+                            }`}
+                          >
+                            {r.recipientType === "client" ? "Client" : "Introducer"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-[12px] text-right font-mono">
+                          {formatNumber(r.trade.total_size)}
+                        </td>
+                        <td className="px-4 py-3 text-[12px] text-right">
+                          {r.retroPct !== null && r.retroPct !== undefined
+                            ? settlement === "percent"
+                              ? `${fmt2(r.retroPct)}%`
+                              : `${fmt2(r.retroPct)} ${ccy}/unit`
+                            : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-[12px] text-right font-mono font-bold text-[#002651]">
+                          {r.retroAmt !== null && r.retroAmt !== undefined
+                            ? `${formatNumber(r.retroAmt)} ${ccy}`
+                            : "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex rounded-full text-[11px] font-bold px-2 py-0.5 ${
+                              r.trade.status === "booked"
                                 ? "bg-emerald-100 text-emerald-700"
-                                : t.status === "cancelled"
+                                : r.trade.status === "cancelled"
                                 ? "bg-red-100 text-red-700"
                                 : "bg-amber-100 text-amber-700"
                             }`}
                           >
-                            {t.status ?? "—"}
+                            {r.trade.status ?? "—"}
                           </span>
                         </td>
-                        {/* Payment Status dropdown */}
-                        <td className="px-4 py-3 min-w-[200px]">
+                        <td className="px-4 py-3 min-w-[210px]">
                           <select
-                            value={payStatus}
-                            onChange={(e) =>
-                              updateRetroStatus(t, e.target.value as RetroStatus)
-                            }
+                            value={status}
+                            onChange={(e) => updateRetroStatus(r, e.target.value as RetroStatus)}
                             className={`rounded-lg border px-2 py-1.5 text-[11px] font-bold w-full transition ${selectColorClass}`}
                           >
                             {RETRO_STATUS_OPTIONS.map((o) => (
-                              <option key={o.value} value={o.value}>
-                                {o.label}
-                              </option>
+                              <option key={o.value} value={o.value}>{o.label}</option>
                             ))}
                           </select>
                         </td>
