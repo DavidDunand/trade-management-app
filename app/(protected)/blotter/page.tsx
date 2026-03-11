@@ -1548,7 +1548,7 @@ if (bookingEntityFilter !== "all" && (t.booking_entity?.legal_name ?? "") !== bo
       onChange={(e) => setBookingEntityFilterRaw(e.target.value)}
       className="rounded-xl border border-black/20 px-3 py-2 bg-white text-sm font-bold"
     >
-      <option value="all">All entities</option>
+      <option value="all">All Booking Entities</option>
       <option value="RiverRock Securities SAS, France">RiverRock Securities SAS, France</option>
       <option value="Valeur Securities AG, Switzerland">Valeur Securities AG, Switzerland</option>
     </select>
