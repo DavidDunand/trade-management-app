@@ -180,7 +180,7 @@ function generateInvoicePdf(
   const senderAddress = senderBilling?.postal_address ?? "[Address — to be completed]";
   const senderVat = senderBilling?.vat_number ? `VAT: ${senderBilling.vat_number}` : "";
 
-  const billToName = dealerBilling?.billing_entity ?? dealerName || "—";
+  const billToName = (dealerBilling?.billing_entity ?? dealerName) || "—";
   const billToAddress = dealerBilling?.postal_address ?? "[Address — to be completed]";
   const billToVat = dealerBilling?.vat_number ? `VAT: ${dealerBilling.vat_number}` : "";
 
