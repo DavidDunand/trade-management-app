@@ -958,7 +958,7 @@ export default function InvoicingPage() {
                 label="Payment Status"
                 options={RETRO_STATUS_OPTIONS.map((o) => o.value)}
                 selected={payPaymentStatusFilter}
-                onChange={setPayPaymentStatusFilter}
+                onChange={(v) => setPayPaymentStatusFilter(v as RetroStatus[])}
                 labelMap={Object.fromEntries(RETRO_STATUS_OPTIONS.map((o) => [o.value, o.label]))}
               />
               <button onClick={() => exportPayablesToCsv(filteredPayableRows, retroMap)} className="inline-flex items-center gap-1.5 rounded-xl border border-black/20 bg-white px-3 py-2 text-sm font-bold hover:bg-black/5 transition">
