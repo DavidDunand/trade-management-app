@@ -638,10 +638,21 @@ export default function InvoicingPage() {
   const filteredPayableRows = useMemo(() => {
     return payableRows.filter((r) => {
       const status = retroMap.get(r.key)?.payment_status ?? "invoice_not_received";
-      // Client filter applies only to client-type rows
-      if (payClientFilter.length && r.recipientType === "client" && !payClientFilter.includes(r.recipientName ?? "")) return false;
-      // Introducer filter applies only to introducer-type rows
-      if (payIntroducerFilter.length && r.recipientType === "introducer" && !payIntroducerFilter.includes(r.recipientName ?? "")) return false;
+      // If either recipient filter is active, the row must match at least one (OR logic).
+      // A client filter never surfaces introducer rows, and vice versa.
+      const clientActive = payClientFilter.length > 0;
+      const introducerActive = payIntroducerFilter.length > 0;
+      if (clientActive || introducerActive) {
+        const matchesClient =
+          clientActive &&
+          r.recipientType === "client" &&
+          payClientFilter.includes(r.recipientName ?? "");
+        const matchesIntroducer =
+          introducerActive &&
+          r.recipientType === "introducer" &&
+          payIntroducerFilter.includes(r.recipientName ?? "");
+        if (!matchesClient && !matchesIntroducer) return false;
+      }
       if (payIsinFilter && !(r.trade.product?.isin ?? "").toLowerCase().includes(payIsinFilter.toLowerCase())) return false;
       if (payTradeStatusFilter !== "all" && (r.trade.status ?? "") !== payTradeStatusFilter) return false;
       if (payPaymentStatusFilter !== "all" && status !== payPaymentStatusFilter) return false;
