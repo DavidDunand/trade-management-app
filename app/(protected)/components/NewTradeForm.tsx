@@ -49,6 +49,18 @@ function numOrNull(v: string) {
   return Number.isFinite(n) ? n : null;
 }
 
+// Check if input is a valid entry
+function isValidName(value: string, list: string[]) {
+  return list.includes(value.trim());
+}
+
+// Enforce correct capitalization / match from list on blur
+function enforceValidName(value: string, list: string[]): string {
+  const match = list.find((n) => n.toLowerCase() === value.trim().toLowerCase());
+  return match ?? "";
+}
+
+
 // Swiss-style formatting: 1'000'000.00
 function formatSwissFromString(v: string, decimals = 2) {
   const n = numOrNull(v);
@@ -224,19 +236,22 @@ export default function NewTradeForm({
     return legs.every((l) => !!l.counterparty_id && (numOrNull(l.size) ?? 0) > 0);
   }, [legs]);
 
-    const canSave =
-    !!selectedProduct &&
-    !!tradeDate &&
-    !!transactionType &&
-    !!bookingEntityId &&
-    !!distributingEntityId &&
-    !!salesName.trim() &&
-    totalSizeNum > 0 &&
-    sellerPriceNum !== null &&
-    buyerPriceNum !== null &&
-    sizesOk &&
-    allLegsOk &&
-    (!reportable || !!bookingTimestamp);
+const canSave =
+  !!selectedProduct &&
+  !!tradeDate &&
+  !!transactionType &&
+  !!bookingEntityId &&
+  !!distributingEntityId &&
+  !!salesName.trim() &&
+  isValidName(clientName, clients.map(c => c.legal_name)) &&
+  isValidName(introducerName, introducers.map(i => i.legal_name)) &&
+  isValidName(salesName, salesPeople.map(s => `${s.first_name} ${s.family_name}`)) &&
+  totalSizeNum > 0 &&
+  sellerPriceNum !== null &&
+  buyerPriceNum !== null &&
+  sizesOk &&
+  allLegsOk &&
+  (!reportable || !!bookingTimestamp);
 
   // load refs
   useEffect(() => {
@@ -752,22 +767,27 @@ if (isUnwind) {
                   </select>
                 </div>
 
-                {/* Client Name */}
-                <div className="md:col-span-6">
-                  <div className="text-sm font-bold mb-1">Client Name</div>
-                  <input
-                    list="clients"
-                    value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                    className="w-full rounded-xl border border-black/20 px-3 py-2 text-sm font-bold bg-white"
-                    placeholder="Start typing…"
-                  />
-                  <datalist id="clients">
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.legal_name} />
-                    ))}
-                  </datalist>
-                </div>
+{/* Client Name */}
+<div className="md:col-span-6">
+  <div className="text-sm font-bold mb-1">Client Name <span className="text-red-600">*</span></div>
+  <input
+    list="clients"
+    value={clientName}
+    onChange={(e) => setClientName(e.target.value)}
+    onBlur={() => setClientName(enforceValidName(clientName, clients.map(c => c.legal_name)))}
+    className="w-full rounded-xl border border-black/20 px-3 py-2 text-sm font-bold bg-white"
+    placeholder="Start typing…"
+  />
+  <datalist id="clients">
+    {clients.map((c) => (
+      <option key={c.id} value={c.legal_name} />
+    ))}
+  </datalist>
+  {clientName && !isValidName(clientName, clients.map(c => c.legal_name)) && (
+    <div className="mt-1 text-xs text-red-600">Select a valid client from the list</div>
+  )}
+</div>
+
 
                 {/* Client Contact */}
                 <div className="md:col-span-6">
@@ -788,22 +808,26 @@ if (isUnwind) {
                   </select>
                 </div>
 
-                {/* Introducer Name */}
-                <div className="md:col-span-6">
-                  <div className="text-sm font-bold mb-1">Introducer Name</div>
-                  <input
-                    list="introducers"
-                    value={introducerName}
-                    onChange={(e) => setIntroducerName(e.target.value)}
-                    className="w-full rounded-xl border border-black/20 px-3 py-2 text-sm font-bold bg-white"
-                    placeholder="Start typing…"
-                  />
-                  <datalist id="introducers">
-                    {introducers.map((c) => (
-                      <option key={c.id} value={c.legal_name} />
-                    ))}
-                  </datalist>
-                </div>
+{/* Introducer Name */}
+<div className="md:col-span-6">
+  <div className="text-sm font-bold mb-1">Introducer Name</div>
+  <input
+    list="introducers"
+    value={introducerName}
+    onChange={(e) => setIntroducerName(e.target.value)}
+    onBlur={() => setIntroducerName(enforceValidName(introducerName, introducers.map(i => i.legal_name)))}
+    className="w-full rounded-xl border border-black/20 px-3 py-2 text-sm font-bold bg-white"
+    placeholder="Start typing…"
+  />
+  <datalist id="introducers">
+    {introducers.map((i) => (
+      <option key={i.id} value={i.legal_name} />
+    ))}
+  </datalist>
+  {introducerName && !isValidName(introducerName, introducers.map(i => i.legal_name)) && (
+    <div className="mt-1 text-xs text-red-600">Select a valid introducer from the list</div>
+  )}
+</div>
 
                 {/* Introducer Contact */}
                 <div className="md:col-span-6">
@@ -824,31 +848,43 @@ if (isUnwind) {
                   </select>
                 </div>
 
-                {/* Sales Name */}
-                <div className="md:col-span-6">
-                  <div className="text-sm font-bold mb-1">
-                    Sales Name <span className="text-red-600">*</span>
-                  </div>
-                  <input
-                    list="salesPeople"
-                    value={salesName}
-                    onChange={(e) => setSalesName(e.target.value)}
-                    className="w-full rounded-xl border border-black/20 px-3 py-2 text-sm font-bold bg-white"
-                    placeholder="Start typing…"
-                  />
-                  <datalist id="salesPeople">
-                    {salesPeople.map((s) => (
-                      <option key={s.id} value={`${s.first_name} ${s.family_name}`} />
-                    ))}
-                  </datalist>
-                </div>
-              </div>
-            </Section>
-
-            {/* Pricing & Fees */}
-            <Section title="Pricing & Fees">
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                <div className="md:col-span-6">
+{/* Sales Name */}
+<div className="md:col-span-6">
+  <div className="text-sm font-bold mb-1">
+    Sales Name <span className="text-red-600">*</span>
+  </div>
+  <input
+    list="salesPeople"
+    value={salesName}
+    onChange={(e) => setSalesName(e.target.value)}
+    onBlur={() =>
+      setSalesName(
+        enforceValidName(
+          salesName,
+          salesPeople.map((s) => `${s.first_name} ${s.family_name}`)
+        )
+      )
+    }
+    className="w-full rounded-xl border border-black/20 px-3 py-2 text-sm font-bold bg-white"
+    placeholder="Start typing…"
+  />
+  <datalist id="salesPeople">
+    {salesPeople.map((s) => (
+      <option key={s.id} value={`${s.first_name} ${s.family_name}`} />
+    ))}
+  </datalist>
+  {salesName &&
+    !isValidName(salesName, salesPeople.map((s) => `${s.first_name} ${s.family_name}`)) && (
+      <div className="mt-1 text-xs text-red-600">
+          Select a valid salesperson from the list
+        </div>
+      )}
+  </div>
+  </div>
+</Section>
+<Section title="Pricing & Fees">
+  <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+    <div className="md:col-span-6">
                   <div className="text-sm font-bold mb-1">{reofferLabel}</div>
                   <input
                     value={sellerPrice}

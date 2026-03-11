@@ -2,7 +2,11 @@
 
 export const dynamic = "force-dynamic";
 
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { supabase } from "@/src/lib/supabase";
+import NewTradeForm from "../components/NewTradeForm"; // ✅ adjust path if your Blotter page is not in the same folder level
+
 function useUrlState(key: string, defaultValue: string) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -32,9 +36,7 @@ function parseMulti(raw: string) {
 function stringifyMulti(values: string[]) {
   return values.map((v) => encodeURIComponent(v)).join(MULTI_SEP);
 }
-import React, { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/src/lib/supabase";
-import NewTradeForm from "../components/NewTradeForm"; // ✅ adjust path if your Blotter page is not in the same folder level
+
 
 type Settlement = "percent" | "units";
 type LegStatus = "pending" | "booked";
@@ -710,8 +712,20 @@ function MultiSelect({
 }) {
   const [open, setOpen] = React.useState(false)
 const [filter,setFilter] = useState("")
+const ref = useRef<HTMLDivElement>(null)
+useEffect(() => {
+  function handleClickOutside(event: MouseEvent) {
+    if (ref.current && !ref.current.contains(event.target as Node)) {
+      setOpen(false)
+    }
+  }
+  document.addEventListener("mousedown", handleClickOutside)
+  return () => {
+    document.removeEventListener("mousedown", handleClickOutside)
+  }
+}, [])
   return (
-    <div className="relative">
+    <div ref={ref} className="relative">
       <button
   type="button"
   onClick={() => setOpen(!open)}
@@ -1032,10 +1046,10 @@ function setAllSales(values: string[]) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      alert(error.message);
-      setLoading(false);
-      return;
-    }
+  console.error("Cancel trade failed:", error);
+  showToast("Session expired. Please log in again.");
+  return;
+}
 
     const flattened: LegRow[] = (data ?? []).map((r: any) => ({
       id: r.id,
@@ -1119,10 +1133,16 @@ const locked =
   rawStatus === "archived" ||
   !!t?.cancelled_at;
 
-    if (locked) {
-      showToast("Status is locked for booked/cancelled/archived trades.");
-      return;
-    }
+console.log("TRADE DEBUG", {
+  rawStatus,
+  cancelledAt: t?.cancelled_at,
+  trade: t
+});
+
+if (locked) {
+  showToast("Status is locked for booked/cancelled/archived trades.");
+  return;
+}
 
     const next: LegStatus = current === "booked" ? "pending" : "booked";
 
