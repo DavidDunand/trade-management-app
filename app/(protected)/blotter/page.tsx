@@ -839,7 +839,7 @@ const salesOptions = useMemo(
   const [statusFilterRaw, setStatusFilterRaw] = useUrlState("status", "all");
 
 const statusFilter =
-  statusFilterRaw as "all" | "pending" | "booked" | "cancelled" | "archived";
+  statusFilterRaw as "all" | "pending" | "booked" | "cancelled";
 
 const setStatusFilter = (v: typeof statusFilter) => {
   setStatusFilterRaw(v);
@@ -882,6 +882,8 @@ function presetClass(active: boolean) {
   // extra filters
   const [tradeDateFrom, setTradeDateFrom] = useUrlState("from", "");
   const [tradeDateTo, setTradeDateTo] = useUrlState("to", "");
+  const [bookingEntityFilterRaw, setBookingEntityFilterRaw] = useUrlState("entity", "all");
+  const bookingEntityFilter = bookingEntityFilterRaw;
   const [isinFilter, setIsinFilter] = useUrlState("isin", "");
   const [issuerFilterRaw, setIssuerFilterRaw] = useUrlState("issuer", "");
 
@@ -1374,6 +1376,8 @@ if (
   !salesFilter.includes(t.sales_name ?? "")
 ) return false;
 
+if (bookingEntityFilter !== "all" && (t.booking_entity?.legal_name ?? "") !== bookingEntityFilter) return false;
+
       if (!q) return true;
 
       const hay = [
@@ -1398,7 +1402,7 @@ if (
 
       return hay.includes(q);
     });
-  }, [rows, search, statusFilter, timeRange, tradeDateFrom, tradeDateTo, isinFilter, issuerFilter, ccyFilter, clientFilter, introducerFilter, salesFilter]);
+  }, [rows, search, statusFilter, timeRange, tradeDateFrom, tradeDateTo, isinFilter, issuerFilter, ccyFilter, clientFilter, introducerFilter, salesFilter, bookingEntityFilter]);
 
   const grouped: TradeGroup[] = useMemo(() => {
     const map = new Map<string, TradeGroup>();
@@ -1433,6 +1437,26 @@ if (
   const toggleTrade = (tradeId: string) => {
     setOpenTrades((prev) => ({ ...prev, [tradeId]: !prev[tradeId] }));
   };
+
+  const hasActiveFilters = !!(
+    isinFilter || issuerFilter.length || ccyFilter.length ||
+    clientFilter.length || introducerFilter.length || salesFilter.length ||
+    statusFilter !== "all" || bookingEntityFilter !== "all" ||
+    tradeDateFrom || tradeDateTo
+  );
+
+  function clearAllFilters() {
+    setIsinFilter("");
+    setIssuerFilterRaw("");
+    setCcyFilterRaw("");
+    setClientFilterRaw("");
+    setIntroducerFilterRaw("");
+    setSalesFilterRaw("");
+    setStatusFilterRaw("all");
+    setBookingEntityFilterRaw("all");
+    setTradeDateFrom("");
+    setTradeDateTo("");
+  }
 
   const HEADER_BG = "bg-[#002651]";
   const TRADE_BG = "bg-[#DEE7F0]";
@@ -1474,18 +1498,6 @@ if (
         </div>
 
         <div className="flex items-center gap-3">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="rounded-xl border border-black/20 px-3 py-2 bg-white text-sm font-bold"
-          >
-            <option value="all">All</option>
-            <option value="pending">Pending</option>
-            <option value="booked">Booked</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="archived">Archived</option>
-          </select>
-
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -1511,8 +1523,43 @@ if (
       </div>
 
       {/* Filters row */}
-      <div className="rounded-2xl border border-black/10 p-4 bg-white">
-       <div className="rounded-2xl border border-black/10 p-4 bg-white space-y-3">
+      <div className="rounded-2xl border border-black/10 p-4 bg-white space-y-3">
+
+  {/* ROW 0 — STATUS + BOOKING ENTITY + ACTIVE FILTERS */}
+  <div className="flex items-center gap-3 flex-wrap">
+    <select
+      value={statusFilter}
+      onChange={(e) => setStatusFilter(e.target.value as any)}
+      className="rounded-xl border border-black/20 px-3 py-2 bg-white text-sm font-bold"
+    >
+      <option value="all">All statuses</option>
+      <option value="pending">Pending</option>
+      <option value="booked">Booked</option>
+      <option value="cancelled">Cancelled</option>
+    </select>
+
+    <select
+      value={bookingEntityFilter}
+      onChange={(e) => setBookingEntityFilterRaw(e.target.value)}
+      className="rounded-xl border border-black/20 px-3 py-2 bg-white text-sm font-bold"
+    >
+      <option value="all">All entities</option>
+      <option value="RiverRock Securities SAS, France">RiverRock Securities SAS, France</option>
+      <option value="Valeur Securities AG, Switzerland">Valeur Securities AG, Switzerland</option>
+    </select>
+
+    {hasActiveFilters && (
+      <div className="flex items-center gap-2 ml-1">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold px-2.5 py-1">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+          Active filters
+        </span>
+        <button onClick={clearAllFilters} className="text-xs font-bold text-black/40 hover:text-black underline">
+          Clear all
+        </button>
+      </div>
+    )}
+  </div>
 
   {/* ROW 1 — COLUMN FILTERS */}
   <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
@@ -1705,7 +1752,6 @@ if (
 
   </div>
 
-</div>
       </div>
 
       <div className="rounded-2xl border border-black/10 overflow-hidden relative">

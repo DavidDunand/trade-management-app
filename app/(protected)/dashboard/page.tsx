@@ -2,6 +2,7 @@
 export const dynamic = "force-dynamic";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ResponsiveContainer,
   BarChart,
@@ -220,19 +221,24 @@ function KpiCard({
   value,
   sub,
   icon,
+  onClick,
 }: {
   label: string;
   value?: string;
   sub?: string;
   icon: React.ReactNode;
+  onClick?: () => void;
 }) {
+  const Tag = onClick ? "button" : "div";
   return (
-    <div
+    <Tag
+      onClick={onClick}
       className={[
         "rounded-3xl border border-zinc-200/70 dark:border-zinc-800/70",
         "bg-white dark:bg-zinc-950",
         "shadow-[0_10px_24px_rgba(0,0,0,0.06)]",
-        "px-5 py-4", // shorter than before
+        "px-5 py-4 text-left w-full",
+        onClick ? "cursor-pointer hover:shadow-lg hover:border-zinc-300/70 transition-shadow" : "",
       ].join(" ")}
     >
       <div className="flex items-start justify-between gap-3">
@@ -258,7 +264,7 @@ function KpiCard({
           {icon}
         </div>
       </div>
-    </div>
+    </Tag>
   );
 }
 
@@ -315,6 +321,7 @@ function ymKey(d: Date) {
 }
 
 export default function AnalyticsPage() {
+  const router = useRouter();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -867,6 +874,13 @@ const ccyGradients = useMemo(() => {
     value={loading ? "…" : formatInt(pendingTrades)}
     sub="awaiting booking"
     icon={<Hourglass className="h-5 w-5 text-[hsl(var(--primary))]" />}
+    onClick={() => {
+      const p = new URLSearchParams();
+      p.set("status", "pending");
+      if (year) { p.set("from", `${year}-01-01`); p.set("to", `${year}-12-31`); }
+      if (sales !== "All") p.set("sales", encodeURIComponent(sales));
+      router.push(`/blotter?${p.toString()}`);
+    }}
   />
 
   <KpiCard
