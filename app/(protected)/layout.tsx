@@ -179,7 +179,7 @@ export default function ProtectedLayout({
     () => [
       { href: "/trade-tickets", label: "Trade Ticket", icon: FileText, adminOnly: true, disabled: true },
       { href: "/transaction-reporting", label: "MiFID 2 Report", icon: FileSpreadsheet, adminOnly: true },
-      { href: "/invoicing", label: "Invoicing", icon: FileSpreadsheet, adminOnly: true, disabled: true },
+      { href: "/invoicing", label: "Invoicing", icon: FileSpreadsheet, adminOnly: true },
     ],
     []
   );
