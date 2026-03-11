@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/src/lib/supabase";
-import * as XLSX from "xlsx";
+
 import { CheckCircle, Clock, FileText, X } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -396,7 +396,8 @@ function MultiSelectFilter({
 
 // ─── Export ───────────────────────────────────────────────────────────────────
 
-function exportPayablesToXlsx(rows: PayableRow[], retroMap: Map<string, RetroPaymentRecord>) {
+async function exportPayablesToXlsx(rows: PayableRow[], retroMap: Map<string, RetroPaymentRecord>) {
+  const XLSX = await import("xlsx");
   const payStatusLabels = Object.fromEntries(RETRO_STATUS_OPTIONS.map((o) => [o.value, o.label]));
   const data = rows.map((r) => {
     const status = retroMap.get(r.key)?.payment_status ?? "invoice_not_received";
