@@ -246,17 +246,21 @@ export default function ProtectedLayout({
               ))}
             </div>
 
-          </nav>
-        </div>
+            <div className="h-5" />
 
-        <div className="px-4 pb-4 pt-3 border-t border-white/10 space-y-3">
-          <FxStatusPanel />
-          <button
-            onClick={signOut}
-            className="w-full rounded-xl bg-white text-[hsl(var(--primary))] py-2 text-[13px] font-medium hover:opacity-95"
-          >
-            Sign out
-          </button>
+            <div className="px-1 pb-3">
+              <FxStatusPanel />
+            </div>
+
+            <div className="pb-3">
+              <button
+                onClick={signOut}
+                className="w-full rounded-xl bg-white text-[hsl(var(--primary))] py-2 text-[13px] font-medium hover:opacity-95"
+              >
+                Sign out
+              </button>
+            </div>
+          </nav>
         </div>
       </aside>
 

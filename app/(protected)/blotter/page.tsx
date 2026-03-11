@@ -1446,17 +1446,22 @@ if (bookingEntityFilter !== "all" && (t.booking_entity?.legal_name ?? "") !== bo
   );
 
   function clearAllFilters() {
-    setIsinFilter("");
-    setIssuerFilterRaw("");
-    setCcyFilterRaw("");
-    setClientFilterRaw("");
-    setIntroducerFilterRaw("");
-    setSalesFilterRaw("");
-    setStatusFilterRaw("all");
-    setBookingEntityFilterRaw("all");
-    setTradeDateFrom("");
-    setTradeDateTo("");
+    // All filters live in the URL — reset in a single replace to avoid race conditions
+    setSearch("");
+    router.replace("?", { scroll: false });
   }
+
+  // Active filter chips for display
+  const activeFilterChips: { label: string; onRemove: () => void }[] = [];
+  if (statusFilter !== "all") activeFilterChips.push({ label: `Status: ${statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}`, onRemove: () => setStatusFilterRaw("all") });
+  if (bookingEntityFilter !== "all") activeFilterChips.push({ label: `Entity: ${bookingEntityFilter.includes("RiverRock") ? "RiverRock" : "Valeur Securities"}`, onRemove: () => setBookingEntityFilterRaw("all") });
+  if (isinFilter) activeFilterChips.push({ label: `ISIN: ${isinFilter}`, onRemove: () => setIsinFilter("") });
+  for (const v of issuerFilter) activeFilterChips.push({ label: `Issuer: ${v}`, onRemove: () => setIssuerFilterRaw(stringifyMulti(issuerFilter.filter((x) => x !== v))) });
+  for (const v of ccyFilter) activeFilterChips.push({ label: `CCY: ${v}`, onRemove: () => setCcyFilterRaw(stringifyMulti(ccyFilter.filter((x) => x !== v))) });
+  for (const v of clientFilter) activeFilterChips.push({ label: `Client: ${v}`, onRemove: () => setClientFilterRaw(stringifyMulti(clientFilter.filter((x) => x !== v))) });
+  for (const v of introducerFilter) activeFilterChips.push({ label: `Introducer: ${v}`, onRemove: () => setIntroducerFilterRaw(stringifyMulti(introducerFilter.filter((x) => x !== v))) });
+  for (const v of salesFilter) activeFilterChips.push({ label: `Sales: ${v}`, onRemove: () => setSalesFilterRaw(stringifyMulti(salesFilter.filter((x) => x !== v))) });
+  if (tradeDateFrom || tradeDateTo) activeFilterChips.push({ label: `Date: ${tradeDateFrom || "…"} → ${tradeDateTo || "…"}`, onRemove: () => { setTradeDateFrom(""); setTradeDateTo(""); } });
 
   const HEADER_BG = "bg-[#002651]";
   const TRADE_BG = "bg-[#DEE7F0]";
@@ -1549,17 +1554,23 @@ if (bookingEntityFilter !== "all" && (t.booking_entity?.legal_name ?? "") !== bo
     </select>
 
     {hasActiveFilters && (
-      <div className="flex items-center gap-2 ml-1">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold px-2.5 py-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
-          Active filters
-        </span>
-        <button onClick={clearAllFilters} className="text-xs font-bold text-black/40 hover:text-black underline">
-          Clear all
-        </button>
-      </div>
+      <button onClick={clearAllFilters} className="ml-1 text-xs font-bold text-black/40 hover:text-black underline">
+        Clear all
+      </button>
     )}
   </div>
+
+  {/* ACTIVE FILTER CHIPS */}
+  {activeFilterChips.length > 0 && (
+    <div className="flex flex-wrap gap-1.5">
+      {activeFilterChips.map((chip) => (
+        <span key={chip.label} className="inline-flex items-center gap-1 rounded-full bg-[#002651]/10 text-[#002651] text-[11px] font-bold px-2.5 py-1">
+          {chip.label}
+          <button onClick={chip.onRemove} className="ml-0.5 hover:opacity-60" aria-label="Remove filter">×</button>
+        </span>
+      ))}
+    </div>
+  )}
 
   {/* ROW 1 — COLUMN FILTERS */}
   <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
