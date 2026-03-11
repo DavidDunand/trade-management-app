@@ -492,7 +492,7 @@ export default function InvoicingPage() {
 
       if (tradeError) throw tradeError;
 
-      const allTrades = (tradeData ?? []) as TradeRow[];
+      const allTrades = (tradeData ?? []) as unknown as TradeRow[];
       setTrades(allTrades);
 
       const tradeIds = allTrades.map((t) => t.id);
