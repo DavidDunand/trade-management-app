@@ -396,35 +396,46 @@ function MultiSelectFilter({
 
 // ─── Export ───────────────────────────────────────────────────────────────────
 
-async function exportPayablesToXlsx(rows: PayableRow[], retroMap: Map<string, RetroPaymentRecord>) {
-  const XLSX = await import("xlsx");
+function exportPayablesToCsv(rows: PayableRow[], retroMap: Map<string, RetroPaymentRecord>) {
   const payStatusLabels = Object.fromEntries(RETRO_STATUS_OPTIONS.map((o) => [o.value, o.label]));
-  const data = rows.map((r) => {
-    const status = retroMap.get(r.key)?.payment_status ?? "invoice_not_received";
-    const ccy = r.trade.product?.currency ?? "";
-    const settlement = r.trade.product?.settlement;
-    const retroPctStr =
-      r.retroPct !== null && r.retroPct !== undefined
-        ? settlement === "percent" ? `${fmt2(r.retroPct)}%` : `${fmt2(r.retroPct)} ${ccy}/unit`
+  const headers = ["ISIN", "Trade Date", "Recipient Name", "Recipient Type", "CCY", "Size", "Retro %", "Retro Amt", "Trade Status", "Payment Status"];
+  const esc = (v: unknown) => {
+    const s = v === null || v === undefined ? "" : String(v);
+    return /[,"\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
+  };
+  const lines = [
+    headers.map(esc).join(","),
+    ...rows.map((r) => {
+      const status = retroMap.get(r.key)?.payment_status ?? "invoice_not_received";
+      const ccy = r.trade.product?.currency ?? "";
+      const settlement = r.trade.product?.settlement;
+      const retroPctStr = r.retroPct !== null && r.retroPct !== undefined
+        ? (settlement === "percent" ? `${fmt2(r.retroPct)}%` : `${fmt2(r.retroPct)} ${ccy}/unit`)
         : "";
-    return {
-      ISIN: r.trade.product?.isin ?? "",
-      "Trade Date": formatDate(r.trade.trade_date),
-      "Recipient Name": r.recipientName ?? "",
-      "Recipient Type": r.recipientType === "client" ? "Client" : "Introducer",
-      CCY: ccy,
-      Size: r.trade.total_size ?? "",
-      "Retro %": retroPctStr,
-      "Retro Amt": r.retroAmt ?? "",
-      "Trade Status": r.trade.status ?? "",
-      "Payment Status": payStatusLabels[status] ?? status,
-    };
-  });
-  const ws = XLSX.utils.json_to_sheet(data);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Payables");
-  const stamp = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `retro-payables-export-${stamp}.xlsx`);
+      return [
+        r.trade.product?.isin ?? "",
+        formatDate(r.trade.trade_date),
+        r.recipientName ?? "",
+        r.recipientType === "client" ? "Client" : "Introducer",
+        ccy,
+        r.trade.total_size ?? "",
+        retroPctStr,
+        r.retroAmt ?? "",
+        r.trade.status ?? "",
+        payStatusLabels[status] ?? status,
+      ].map(esc).join(",");
+    }),
+  ];
+  const BOM = "\uFEFF";
+  const blob = new Blob([BOM + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `retro-payables-export-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
@@ -950,8 +961,8 @@ export default function InvoicingPage() {
                 onChange={setPayPaymentStatusFilter}
                 labelMap={Object.fromEntries(RETRO_STATUS_OPTIONS.map((o) => [o.value, o.label]))}
               />
-              <button onClick={() => exportPayablesToXlsx(filteredPayableRows, retroMap)} className="inline-flex items-center gap-1.5 rounded-xl border border-black/20 bg-white px-3 py-2 text-sm font-bold hover:bg-black/5 transition">
-                Export Excel
+              <button onClick={() => exportPayablesToCsv(filteredPayableRows, retroMap)} className="inline-flex items-center gap-1.5 rounded-xl border border-black/20 bg-white px-3 py-2 text-sm font-bold hover:bg-black/5 transition">
+                Export CSV
               </button>
               {(payIsinFilter || payClientFilter.length || payIntroducerFilter.length || payTradeStatusFilter !== "all" || payPaymentStatusFilter.length > 0 || payDateFrom || payDateTo) && (
                 <button onClick={() => { setPayIsinFilter(""); setPayClientFilter([]); setPayIntroducerFilter([]); setPayTradeStatusFilter("all"); setPayPaymentStatusFilter([]); setPayDateFrom(""); setPayDateTo(""); }} className="text-xs font-bold text-black/40 hover:text-black underline">Clear all</button>
