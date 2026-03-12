@@ -884,6 +884,8 @@ function presetClass(active: boolean) {
   const [tradeDateTo, setTradeDateTo] = useUrlState("to", "");
   const [bookingEntityFilterRaw, setBookingEntityFilterRaw] = useUrlState("entity", "all");
   const bookingEntityFilter = bookingEntityFilterRaw;
+  const [distribEntityFilterRaw, setDistribEntityFilterRaw] = useUrlState("distrib", "all");
+  const distribEntityFilter = distribEntityFilterRaw;
   const [isinFilter, setIsinFilter] = useUrlState("isin", "");
   const [issuerFilterRaw, setIssuerFilterRaw] = useUrlState("issuer", "");
 
@@ -1377,6 +1379,7 @@ if (
 ) return false;
 
 if (bookingEntityFilter !== "all" && (t.booking_entity?.legal_name ?? "") !== bookingEntityFilter) return false;
+if (distribEntityFilter !== "all" && (t.distributing_entity?.legal_name ?? "") !== distribEntityFilter) return false;
 
       if (!q) return true;
 
@@ -1441,7 +1444,7 @@ if (bookingEntityFilter !== "all" && (t.booking_entity?.legal_name ?? "") !== bo
   const hasActiveFilters = !!(
     isinFilter || issuerFilter.length || ccyFilter.length ||
     clientFilter.length || introducerFilter.length || salesFilter.length ||
-    statusFilter !== "all" || bookingEntityFilter !== "all" ||
+    statusFilter !== "all" || bookingEntityFilter !== "all" || distribEntityFilter !== "all" ||
     tradeDateFrom || tradeDateTo
   );
 
@@ -1454,7 +1457,8 @@ if (bookingEntityFilter !== "all" && (t.booking_entity?.legal_name ?? "") !== bo
   // Active filter chips for display
   const activeFilterChips: { label: string; onRemove: () => void }[] = [];
   if (statusFilter !== "all") activeFilterChips.push({ label: `Status: ${statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}`, onRemove: () => setStatusFilterRaw("all") });
-  if (bookingEntityFilter !== "all") activeFilterChips.push({ label: `Entity: ${bookingEntityFilter.includes("RiverRock") ? "RiverRock" : "Valeur Securities"}`, onRemove: () => setBookingEntityFilterRaw("all") });
+  if (bookingEntityFilter !== "all") activeFilterChips.push({ label: `Booking Entity: ${bookingEntityFilter.includes("RiverRock") ? "RiverRock" : "Valeur Securities"}`, onRemove: () => setBookingEntityFilterRaw("all") });
+  if (distribEntityFilter !== "all") activeFilterChips.push({ label: `Distribution Entity: ${distribEntityFilter.includes("RiverRock") ? "RiverRock" : "Valeur Securities"}`, onRemove: () => setDistribEntityFilterRaw("all") });
   if (isinFilter) activeFilterChips.push({ label: `ISIN: ${isinFilter}`, onRemove: () => setIsinFilter("") });
   for (const v of issuerFilter) activeFilterChips.push({ label: `Issuer: ${v}`, onRemove: () => setIssuerFilterRaw(stringifyMulti(issuerFilter.filter((x) => x !== v))) });
   for (const v of ccyFilter) activeFilterChips.push({ label: `CCY: ${v}`, onRemove: () => setCcyFilterRaw(stringifyMulti(ccyFilter.filter((x) => x !== v))) });
@@ -1548,7 +1552,17 @@ if (bookingEntityFilter !== "all" && (t.booking_entity?.legal_name ?? "") !== bo
       onChange={(e) => setBookingEntityFilterRaw(e.target.value)}
       className="rounded-xl border border-black/20 px-3 py-2 bg-white text-sm font-bold"
     >
-      <option value="all">All Booking Entities</option>
+      <option value="all">All booking entities</option>
+      <option value="RiverRock Securities SAS, France">RiverRock Securities SAS, France</option>
+      <option value="Valeur Securities AG, Switzerland">Valeur Securities AG, Switzerland</option>
+    </select>
+
+    <select
+      value={distribEntityFilter}
+      onChange={(e) => setDistribEntityFilterRaw(e.target.value)}
+      className="rounded-xl border border-black/20 px-3 py-2 bg-white text-sm font-bold"
+    >
+      <option value="all">All distribution entities</option>
       <option value="RiverRock Securities SAS, France">RiverRock Securities SAS, France</option>
       <option value="Valeur Securities AG, Switzerland">Valeur Securities AG, Switzerland</option>
     </select>

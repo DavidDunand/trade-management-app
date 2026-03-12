@@ -177,7 +177,7 @@ export default function ProtectedLayout({
 
   const docItems: NavItemDef[] = useMemo(
     () => [
-      { href: "/trade-tickets", label: "Trade Ticket", icon: FileText, adminOnly: true, disabled: true },
+      { href: "/trade-tickets", label: "Trade Tickets", icon: FileText, adminOnly: true },
       { href: "/transaction-reporting", label: "MiFID 2 Report", icon: FileSpreadsheet, adminOnly: true },
       { href: "/invoicing", label: "Invoicing", icon: FileSpreadsheet, adminOnly: true },
     ],
