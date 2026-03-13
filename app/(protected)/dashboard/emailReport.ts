@@ -99,15 +99,47 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-// ─── SVG → base64 data URI (email-safe) ──────────────────────────────────────
-// Email clients (Outlook, Apple Mail) don't render inline SVG — embedding as
-// a base64-encoded data URI inside an <img> tag is the standard workaround.
+// ─── SVG → PNG via Canvas (email-safe) ───────────────────────────────────────
+// data:image/svg+xml is blocked or unsupported by Outlook and many clients.
+// Rendering to a Canvas and exporting as PNG gives near-universal compatibility.
 
-function svgToImgTag(svg: string, width: number, height: number): string {
-  const b64 = btoa(unescape(encodeURIComponent(svg)));
+async function svgToPngDataUrl(
+  svgStr: string,
+  width: number,
+  height: number
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const scale = 2; // 2× for crisp rendering
+    const canvas = document.createElement("canvas");
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) { reject(new Error("canvas unavailable")); return; }
+
+    // White background so transparent SVG areas don't turn black
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      // Fall back to a 1×1 transparent PNG on failure
+      resolve("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+    };
+    img.src = url;
+  });
+}
+
+function imgTag(src: string, width: number, height: number): string {
   return (
-    `<img src="data:image/svg+xml;base64,${b64}" ` +
-    `width="${width}" height="${height}" ` +
+    `<img src="${src}" width="${width}" height="${height}" ` +
     `style="display:block;max-width:100%;" alt="" />`
   );
 }
@@ -227,7 +259,14 @@ function legendStrip(
 
 // ─── HTML builder ────────────────────────────────────────────────────────────
 
-function buildHtml(data: EmailReportData): string {
+interface ChartImages {
+  entityDonutSrc: string;
+  txnDonutSrc: string;
+  volBarSrc: string;
+  volBarHeight: number;
+}
+
+function buildHtml(data: EmailReportData, charts: ChartImages): string {
   const dateStr = todayStr();
   const salesLabel = data.sales === "All" ? "All Sales" : data.sales;
 
@@ -291,13 +330,8 @@ function buildHtml(data: EmailReportData): string {
     `<tbody>${monthRows}${fyRow}</tbody>` +
     `</table>`;
 
-  /* ─── 2. Donut charts → base64 <img> for email compatibility ─── */
-  const entitySegments = data.pnlByBookingEntity.map((x, i) => ({
-    label: x.name,
-    value: x.pnl,
-    color: ENTITY_COLORS[i % ENTITY_COLORS.length],
-  }));
-  const entityDonutImg = svgToImgTag(buildDonutSvg(entitySegments, 200), 200, 200);
+  /* ─── 2. Donut charts — PNG srcs pre-computed asynchronously ─── */
+  const entityDonutImg = imgTag(charts.entityDonutSrc, 200, 200);
   const entityLegend = legendStrip(
     data.pnlByBookingEntity.map((x, i) => ({
       label: x.name,
@@ -306,12 +340,7 @@ function buildHtml(data: EmailReportData): string {
     }))
   );
 
-  const txnSegments = data.pnlByTxnType.map((x) => ({
-    label: x.type,
-    value: x.pnl,
-    color: TXN_COLORS[x.type] ?? "#405363",
-  }));
-  const txnDonutImg = svgToImgTag(buildDonutSvg(txnSegments, 200), 200, 200);
+  const txnDonutImg = imgTag(charts.txnDonutSrc, 200, 200);
   const txnLegend = legendStrip(
     data.pnlByTxnType.map((x) => ({
       label: x.type,
@@ -347,10 +376,9 @@ function buildHtml(data: EmailReportData): string {
     `<tbody>${clientRows}</tbody>` +
     `</table>`;
 
-  /* ─── 4. Volumes by issuer → base64 <img> ─── */
-  const { data: volData, currencies } = data.volumesByIssuerCurrency;
-  const volBarSvg = buildStackedBarsSvg(volData, currencies, 560);
-  const volBarImg = svgToImgTag(volBarSvg, 560, Math.max(60, volData.length * 28 + 6));
+  /* ─── 4. Volumes by issuer — PNG src pre-computed asynchronously ─── */
+  const { currencies } = data.volumesByIssuerCurrency;
+  const volBarImg = imgTag(charts.volBarSrc, 560, charts.volBarHeight);
   const volLegend = legendStrip(
     currencies.map((ccy) => ({ label: ccy, color: ccyColor(ccy) }))
   );
@@ -456,13 +484,34 @@ function buildHtml(data: EmailReportData): string {
 
 // ─── Public entry point ───────────────────────────────────────────────────────
 
-export function downloadEmailReport(data: EmailReportData): void {
+export async function downloadEmailReport(data: EmailReportData): Promise<void> {
   const dateStr = todayStr();
   const salesLabel = data.sales === "All" ? "All Sales" : data.sales;
   const subject = `P&L Report as of ${dateStr} ${salesLabel}`;
   const fromEmail = data.salesEmail ?? "trading@valeur.ch";
 
-  const html = buildHtml(data);
+  // Pre-render all SVG charts to PNG in parallel for email-client compatibility
+  const entitySegments = data.pnlByBookingEntity.map((x, i) => ({
+    label: x.name,
+    value: x.pnl,
+    color: ENTITY_COLORS[i % ENTITY_COLORS.length],
+  }));
+  const txnSegments = data.pnlByTxnType.map((x) => ({
+    label: x.type,
+    value: x.pnl,
+    color: TXN_COLORS[x.type] ?? "#405363",
+  }));
+  const { data: volData, currencies } = data.volumesByIssuerCurrency;
+  const volBarSvg = buildStackedBarsSvg(volData, currencies, 560);
+  const volBarHeight = Math.max(60, volData.length * 28 + 6);
+
+  const [entityDonutSrc, txnDonutSrc, volBarSrc] = await Promise.all([
+    svgToPngDataUrl(buildDonutSvg(entitySegments, 200), 200, 200),
+    svgToPngDataUrl(buildDonutSvg(txnSegments, 200), 200, 200),
+    svgToPngDataUrl(volBarSvg, 560, volBarHeight),
+  ]);
+
+  const html = buildHtml(data, { entityDonutSrc, txnDonutSrc, volBarSrc, volBarHeight });
 
   const eml = [
     "MIME-Version: 1.0",

@@ -434,13 +434,15 @@ useEffect(() => {
       setSalesEmail("trading@valeur.ch");
       return;
     }
+    // sales_name is stored as "first_name family_name" — fetch all and match
     supabase
-      .from("profiles")
-      .select("email")
-      .eq("full_name", sales)
-      .maybeSingle()
+      .from("sales_people")
+      .select("first_name, family_name, email")
       .then(({ data }) => {
-        setSalesEmail((data as any)?.email ?? "trading@valeur.ch");
+        const match = (data as any[])?.find(
+          (p: any) => `${p.first_name} ${p.family_name}` === sales
+        );
+        setSalesEmail(match?.email ?? "trading@valeur.ch");
       });
   }, [sales]);
 
@@ -856,7 +858,7 @@ const ccyGradients = useMemo(() => {
   }));
 }, [volumesByIssuerCurrency.currencies]);
 
-  const handleEmailReport = () => {
+  const handleEmailReport = async () => {
     const data: EmailReportData = {
       year,
       sales,
@@ -869,7 +871,7 @@ const ccyGradients = useMemo(() => {
       volumesByIssuerCurrency,
       tradesByIssuer,
     };
-    downloadEmailReport(data);
+    await downloadEmailReport(data);
   };
 
   return (
