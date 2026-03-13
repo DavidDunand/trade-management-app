@@ -1491,12 +1491,7 @@ if (distribEntityFilter !== "all" && (t.distributing_entity?.legal_name ?? "") !
   // Strings compare by value, so this only triggers when filters actually change.
   const blotterFilterKey = [
     search, statusFilter, timeRange, tradeDateFrom, tradeDateTo, isinFilter,
-    searchParams.get("issuer") ?? "",
-    searchParams.get("ccy") ?? "",
-    searchParams.get("client") ?? "",
-    searchParams.get("introducer") ?? "",
-    searchParams.get("sales") ?? "",
-    searchParams.get("bookingEntity") ?? "",
+    issuerFilterRaw, ccyFilterRaw, clientFilterRaw, introducerFilterRaw, salesFilterRaw, bookingEntityFilterRaw,
   ].join("|");
   useEffect(() => { setBlotterPage(0); }, [blotterFilterKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
