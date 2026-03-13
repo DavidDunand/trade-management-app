@@ -35,6 +35,8 @@ export interface TradeLeg {
   dealerSSI?: string;
   counterpartyLegalName: string;
   counterpartySSI?: string;
+  /** ID of the trade leg's counterparty (custodian) — used to fetch their contacts */
+  counterpartyId?: string;
   clientId: string;
 }
 

@@ -79,12 +79,14 @@ function DataRow({
 interface Props {
   leg: TradeLeg;
   contact: ClientContact;
+  /** Contact of the custodian (counterparty) shown in Settlement Instructions */
+  custodianContact?: ClientContact | null;
   user: AppUser;
   /** Optional ref for html-to-image capture */
   containerRef?: React.RefObject<HTMLDivElement>;
 }
 
-export default function TicketTemplate({ leg, contact, user, containerRef }: Props) {
+export default function TicketTemplate({ leg, contact, custodianContact, user, containerRef }: Props) {
   const isValeur = leg.distributingEntity === "Valeur Securities AG, Switzerland";
   const isClientBuy = leg.direction === "sell"; // dealer sells → CLIENT BUY
 
@@ -109,7 +111,7 @@ export default function TicketTemplate({ leg, contact, user, containerRef }: Pro
   const clientBlock = {
     legalName: leg.counterpartyLegalName,
     ssi: leg.counterpartySSI ?? "—",
-    contact: contact.email,
+    contact: custodianContact?.email ?? "",
   };
   const buyerBlock = isClientBuy ? clientBlock : dealerBlock;
   const sellerBlock = isClientBuy ? dealerBlock : clientBlock;

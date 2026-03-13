@@ -18,6 +18,7 @@ export default function TradeTicketWizard({ currentUser }: Props) {
   const [step, setStep] = useState<WizardStep>(1);
   const [selectedLeg, setSelectedLeg] = useState<TradeLeg | null>(null);
   const [selectedContact, setSelectedContact] = useState<ClientContact | null>(null);
+  const [custodianContact, setCustodianContact] = useState<ClientContact | null>(null);
 
   // Track the highest reached step so the stepper can show correct completed state
   const [maxStep, setMaxStep] = useState<WizardStep>(1);
@@ -32,6 +33,7 @@ export default function TradeTicketWizard({ currentUser }: Props) {
     setMaxStep(1);
     setSelectedLeg(null);
     setSelectedContact(null);
+    setCustodianContact(null);
   }
 
   // Determine which steps to skip based on contact count
@@ -80,9 +82,11 @@ export default function TradeTicketWizard({ currentUser }: Props) {
               <Step4Contact
                 leg={selectedLeg}
                 initialContact={selectedContact}
+                initialCustodianContact={custodianContact}
                 onBack={() => setStep(3)}
-                onNext={(contact) => {
+                onNext={(contact, cpContact) => {
                   setSelectedContact(contact);
+                  setCustodianContact(cpContact);
                   advance(5);
                 }}
               />
@@ -92,6 +96,7 @@ export default function TradeTicketWizard({ currentUser }: Props) {
               <Step5Preview
                 leg={selectedLeg}
                 contact={selectedContact}
+                custodianContact={custodianContact}
                 user={currentUser}
                 onBack={() => setStep(4)}
                 onNext={() => advance(6)}
@@ -102,6 +107,7 @@ export default function TradeTicketWizard({ currentUser }: Props) {
               <Step6Export
                 leg={selectedLeg}
                 contact={selectedContact}
+                custodianContact={custodianContact}
                 user={currentUser}
                 onBack={() => setStep(5)}
                 onReset={reset}

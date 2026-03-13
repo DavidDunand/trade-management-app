@@ -35,6 +35,7 @@ export async function GET(
       trade_id,
       leg,
       size,
+      counterparty_id,
       counterparty:counterparty_id(legal_name, ssi),
       trade:trade_id(
         id,
@@ -109,11 +110,12 @@ export async function GET(
     clientName: t?.client_name ?? "-",
     bookingEntity,
     distributingEntity,
-    dealerLegalName: isDistValeur ? "Valeur Securities AG" : "RiverRock Securities SAS, France",
+    dealerLegalName: isDistValeur ? "Valeur Securities AG, Switzerland" : "RiverRock Securities SAS, France",
     // Valeur: hardcoded Euroclear SSI. RiverRock: opposite-direction leg's counterparty SSI
     dealerSSI: isDistValeur ? "Euroclear 41420" : dealerSSI,
     counterpartyLegalName: r.counterparty?.legal_name ?? "-",
     counterpartySSI: r.counterparty?.ssi ?? undefined,
+    counterpartyId: r.counterparty_id ?? undefined,
     clientId: t?.client_contact?.advisor_id ?? "",
   };
 

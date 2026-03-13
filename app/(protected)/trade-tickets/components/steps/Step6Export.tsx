@@ -9,6 +9,7 @@ import type { TradeLeg, ClientContact, AppUser, TicketRecord } from "../../types
 interface Props {
   leg: TradeLeg;
   contact: ClientContact;
+  custodianContact?: ClientContact | null;
   user: AppUser;
   onBack: () => void;
   onReset: () => void;
@@ -23,7 +24,7 @@ function fmtDateTime(iso: string) {
   });
 }
 
-export default function Step6Export({ leg, contact, user, onBack, onReset }: Props) {
+export default function Step6Export({ leg, contact, custodianContact, user, onBack, onReset }: Props) {
   const [generating, setGenerating] = useState<"docx" | "pdf" | "png" | null>(null);
   const [history, setHistory] = useState<TicketRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -61,7 +62,7 @@ export default function Step6Export({ leg, contact, user, onBack, onReset }: Pro
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ legId: leg.id, contactId: contact.id, format }),
+        body: JSON.stringify({ legId: leg.id, contactId: contact.id, custodianContactId: custodianContact?.id ?? null, format }),
       });
 
       if (!res.ok) {
@@ -116,7 +117,7 @@ export default function Step6Export({ leg, contact, user, onBack, onReset }: Pro
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ legId: leg.id, contactId: contact.id, format: "png", logOnly: true }),
+          body: JSON.stringify({ legId: leg.id, contactId: contact.id, custodianContactId: custodianContact?.id ?? null, format: "png", logOnly: true }),
         }).catch(() => {});
       }
 
@@ -204,6 +205,7 @@ export default function Step6Export({ leg, contact, user, onBack, onReset }: Pro
         <TicketTemplate
           leg={leg}
           contact={contact}
+          custodianContact={custodianContact}
           user={user}
           containerRef={ticketRef as React.RefObject<HTMLDivElement>}
         />

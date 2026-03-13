@@ -2,7 +2,7 @@
 export const dynamic = "force-dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/src/lib/supabase";
-import { Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Building2, Plus, X } from "lucide-react";
+import { Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Building2, Plus, X, Users } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,6 +24,14 @@ type BillingRecord = {
   postal_address: string;
   vat_number: string | null;
   billing_email: string | null;
+};
+
+type CpContact = {
+  id: string;
+  counterparty_id: string;
+  first_name: string;
+  family_name: string;
+  email: string | null;
 };
 
 type BankAccountRecord = {
@@ -106,6 +114,15 @@ export default function CounterpartiesPage() {
   const [bankDraft, setBankDraft] = useState({ ...emptyBankDraft });
   const [savingBilling, setSavingBilling] = useState(false);
   const [addingBank, setAddingBank] = useState(false);
+
+  // Contacts drawer
+  const [openCp, setOpenCp] = useState<Counterparty | null>(null);
+  const [cpContacts, setCpContacts] = useState<CpContact[]>([]);
+  const [contactFirst, setContactFirst] = useState("");
+  const [contactFamily, setContactFamily] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [contactDraft, setContactDraft] = useState<Partial<CpContact>>({});
 
   // ─── Counterparty CRUD ──────────────────────────────────────────────────────
 
@@ -308,6 +325,76 @@ export default function CounterpartiesPage() {
     else setBankAccounts((prev) => prev.filter((a) => a.id !== id));
   };
 
+  // ─── Contacts drawer ────────────────────────────────────────────────────────
+
+  const fetchCpContacts = async (cpId: string) => {
+    const { data, error } = await supabase
+      .from("counterparty_contacts")
+      .select("id, counterparty_id, first_name, family_name, email")
+      .eq("counterparty_id", cpId)
+      .order("family_name");
+    if (error) alert(error.message);
+    setCpContacts((data ?? []) as any);
+  };
+
+  const openContactsDrawer = async (cp: Counterparty) => {
+    setOpenCp(cp);
+    setCpContacts([]);
+    setEditingContactId(null);
+    setContactDraft({});
+    setContactFirst("");
+    setContactFamily("");
+    setContactEmail("");
+    await fetchCpContacts(cp.id);
+  };
+
+  const addCpContact = async () => {
+    if (!openCp) return;
+    if (!contactFirst.trim() || !contactFamily.trim()) return;
+    const { error } = await supabase.from("counterparty_contacts").insert([{
+      counterparty_id: openCp.id,
+      first_name: contactFirst.trim(),
+      family_name: contactFamily.trim(),
+      email: contactEmail.trim() || null,
+    }]);
+    if (error) return alert(error.message);
+    setContactFirst("");
+    setContactFamily("");
+    setContactEmail("");
+    fetchCpContacts(openCp.id);
+  };
+
+  const startContactEdit = (c: CpContact) => {
+    setEditingContactId(c.id);
+    setContactDraft({ ...c, email: c.email ?? "" });
+  };
+
+  const cancelContactEdit = () => {
+    setEditingContactId(null);
+    setContactDraft({});
+  };
+
+  const saveContactEdit = async () => {
+    if (!editingContactId) return;
+    const payload = {
+      first_name: (contactDraft.first_name ?? "").trim(),
+      family_name: (contactDraft.family_name ?? "").trim(),
+      email: (contactDraft.email ?? "").trim() || null,
+    };
+    if (!payload.first_name || !payload.family_name) return alert("First and family name are required.");
+    const { error } = await supabase.from("counterparty_contacts").update(payload).eq("id", editingContactId);
+    if (error) return alert(error.message);
+    cancelContactEdit();
+    if (openCp) fetchCpContacts(openCp.id);
+  };
+
+  const deleteCpContact = async (id: string) => {
+    if (!confirm("Delete this contact?")) return;
+    const { error } = await supabase.from("counterparty_contacts").delete().eq("id", id);
+    if (error) return alert(error.message);
+    if (openCp) fetchCpContacts(openCp.id);
+  };
+
   // ─── Shared styles ──────────────────────────────────────────────────────────
 
   const iconBtn =
@@ -449,6 +536,15 @@ export default function CounterpartiesPage() {
                       <div className="flex justify-end items-center gap-2">
                         <button
                           type="button"
+                          onClick={() => openContactsDrawer(r)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-black/15 bg-white px-2.5 py-1.5 text-xs font-bold hover:bg-black/5 transition"
+                          title="Manage Contacts"
+                        >
+                          <Users className="h-3.5 w-3.5" />
+                          Contacts
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => openBillingModal(r)}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-black/15 bg-white px-2.5 py-1.5 text-xs font-bold hover:bg-black/5 transition"
                           title="Billing Details"
@@ -474,6 +570,147 @@ export default function CounterpartiesPage() {
           </tbody>
         </table>
       </div>
+
+      {/* ── Contacts Drawer ── */}
+      {openCp && (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setOpenCp(null)} />
+          <div className="absolute right-0 top-0 h-full w-full max-w-xl bg-white shadow-2xl border-l border-black/10 flex flex-col">
+            <div className="px-5 py-4 bg-[#002651] text-white flex items-center justify-between">
+              <div>
+                <div className="text-lg font-semibold">Contacts</div>
+                <div className="text-xs text-white/80">{openCp.legal_name}</div>
+              </div>
+              <button
+                onClick={() => setOpenCp(null)}
+                className="rounded-lg bg-white/10 px-3 py-1 text-sm hover:bg-white/15"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto">
+              {/* Add contact form */}
+              <div className="rounded-2xl border border-black/10 p-4 space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <input
+                    value={contactFirst}
+                    onChange={(e) => setContactFirst(e.target.value)}
+                    placeholder="First Name"
+                    className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold"
+                  />
+                  <input
+                    value={contactFamily}
+                    onChange={(e) => setContactFamily(e.target.value)}
+                    placeholder="Family Name"
+                    className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold"
+                  />
+                  <input
+                    value={contactEmail}
+                    onChange={(e) => setContactEmail(e.target.value)}
+                    placeholder="Email"
+                    type="email"
+                    className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold"
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    onClick={addCpContact}
+                    className="rounded-xl bg-[#002651] text-white px-4 py-2 text-sm font-bold hover:opacity-95"
+                  >
+                    Add contact
+                  </button>
+                </div>
+              </div>
+
+              {/* Contacts list */}
+              <div className="rounded-2xl border border-black/10 overflow-x-auto">
+                <table className="min-w-[620px] w-full table-fixed text-sm font-bold">
+                  <colgroup>
+                    <col className="w-[120px]" />
+                    <col className="w-[140px]" />
+                    <col />
+                    <col className="w-[160px]" />
+                  </colgroup>
+                  <thead className="bg-black/5 text-left">
+                    <tr>
+                      <th className="p-3">First Name</th>
+                      <th className="p-3">Family Name</th>
+                      <th className="p-3">Email</th>
+                      <th className="p-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cpContacts.map((c) => {
+                      const isEdit = editingContactId === c.id;
+                      return (
+                        <tr key={c.id} className="border-t border-black/10 align-top">
+                          <td className="p-3">
+                            {isEdit ? (
+                              <input
+                                value={(contactDraft.first_name as string) ?? ""}
+                                onChange={(e) => setContactDraft((d) => ({ ...d, first_name: e.target.value }))}
+                                className="w-full rounded-lg border border-black/20 px-2 py-1"
+                              />
+                            ) : (
+                              <div className="truncate" title={c.first_name}>{c.first_name}</div>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {isEdit ? (
+                              <input
+                                value={(contactDraft.family_name as string) ?? ""}
+                                onChange={(e) => setContactDraft((d) => ({ ...d, family_name: e.target.value }))}
+                                className="w-full rounded-lg border border-black/20 px-2 py-1"
+                              />
+                            ) : (
+                              <div className="truncate" title={c.family_name}>{c.family_name}</div>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {isEdit ? (
+                              <input
+                                value={(contactDraft.email as string) ?? ""}
+                                onChange={(e) => setContactDraft((d) => ({ ...d, email: e.target.value }))}
+                                className="w-full rounded-lg border border-black/20 px-2 py-1"
+                              />
+                            ) : (
+                              <div className="truncate" title={c.email ?? ""}>{c.email ?? "-"}</div>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {isEdit ? (
+                              <div className="flex justify-end gap-2 whitespace-nowrap">
+                                <button onClick={saveContactEdit} className="rounded-lg bg-[#002651] text-white px-3 py-1 text-sm hover:opacity-95">Save</button>
+                                <button onClick={cancelContactEdit} className="rounded-lg border border-black/20 px-3 py-1 text-sm hover:bg-black/5">Cancel</button>
+                              </div>
+                            ) : (
+                              <div className="flex justify-end items-center gap-2 whitespace-nowrap">
+                                <button type="button" onClick={() => startContactEdit(c)} className={iconBtn} title="Edit" aria-label="Edit contact">
+                                  <Pencil className="h-4 w-4" />
+                                </button>
+                                <button type="button" onClick={() => deleteCpContact(c.id)} className={iconBtn + " hover:bg-red-50"} title="Delete" aria-label="Delete contact">
+                                  <Trash2 className="h-4 w-4 text-red-600" />
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {cpContacts.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="p-6 text-black/60">No contacts yet.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="text-xs text-black/60">Contacts are deleted automatically if you delete the counterparty.</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Billing Details Modal ── */}
       {billingCp && (

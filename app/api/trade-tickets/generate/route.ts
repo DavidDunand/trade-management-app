@@ -63,6 +63,7 @@ async function fetchLegData(legId: string): Promise<TradeLeg | null> {
       trade_id,
       leg,
       size,
+      counterparty_id,
       counterparty:counterparty_id(legal_name, ssi),
       trade:trade_id(
         reference,
@@ -141,11 +142,12 @@ async function fetchLegData(legId: string): Promise<TradeLeg | null> {
     clientName: t?.client_name ?? "-",
     bookingEntity,
     distributingEntity,
-    dealerLegalName: isDistValeur ? "Valeur Securities AG" : "RiverRock Securities SAS, France",
+    dealerLegalName: isDistValeur ? "Valeur Securities AG, Switzerland" : "RiverRock Securities SAS, France",
     // Valeur: hardcoded Euroclear SSI. RiverRock: opposite-direction leg's counterparty SSI
     dealerSSI: isDistValeur ? "Euroclear 41420" : dealerSSI,
     counterpartyLegalName: r.counterparty?.legal_name ?? "-",
     counterpartySSI: r.counterparty?.ssi ?? undefined,
+    counterpartyId: r.counterparty_id ?? undefined,
     clientId: advisorId,
   };
 }
@@ -155,6 +157,23 @@ async function fetchLegData(legId: string): Promise<TradeLeg | null> {
 async function fetchContact(contactId: string) {
   const { data, error } = await supabase
     .from("advisor_contacts")
+    .select("id, first_name, family_name, email")
+    .eq("id", contactId)
+    .single();
+  if (error || !data) return null;
+  const d = data as any;
+  return {
+    id: d.id as string,
+    name: `${d.first_name} ${d.family_name}`,
+    email: (d.email as string | null) ?? "",
+  };
+}
+
+// ─── Fetch custodian contact (from counterparty_contacts) ─────────────────────
+
+async function fetchCustodianContact(contactId: string) {
+  const { data, error } = await supabase
+    .from("counterparty_contacts")
     .select("id, first_name, family_name, email")
     .eq("id", contactId)
     .single();
@@ -195,7 +214,7 @@ async function logTicket(legId: string, contactId: string, format: string, userI
 
 // ─── DOCX generation ──────────────────────────────────────────────────────────
 
-async function generateDocx(leg: TradeLeg, contact: { id: string; name: string; email: string }, user: { name: string; email: string }): Promise<Buffer> {
+async function generateDocx(leg: TradeLeg, contact: { id: string; name: string; email: string }, user: { name: string; email: string }, custodianContactEmail: string): Promise<Buffer> {
   const {
     Document, Packer, Paragraph, TextRun, ImageRun, Table, TableRow, TableCell,
     AlignmentType, BorderStyle, WidthType, ShadingType, VerticalAlign,
@@ -301,7 +320,7 @@ async function generateDocx(leg: TradeLeg, contact: { id: string; name: string; 
   const clientBlock = {
     legalName: leg.counterpartyLegalName,
     ssi: leg.counterpartySSI ?? "-",
-    contact: contact.email,
+    contact: custodianContactEmail,
   };
 
   const buyerBlock = isClientBuy ? clientBlock : dealerBlock;
@@ -484,7 +503,7 @@ async function generateDocx(leg: TradeLeg, contact: { id: string; name: string; 
 
 // ─── PDF generation (pdfkit) ──────────────────────────────────────────────────
 
-async function generatePdf(leg: TradeLeg, contact: { id: string; name: string; email: string }, user: { name: string; email: string }): Promise<Buffer> {
+async function generatePdf(leg: TradeLeg, contact: { id: string; name: string; email: string }, user: { name: string; email: string }, custodianContactEmail: string): Promise<Buffer> {
   const PDFDocument = (await import("pdfkit")).default;
 
   const isValeur = leg.distributingEntity === "Valeur Securities AG, Switzerland";
@@ -589,7 +608,7 @@ async function generatePdf(leg: TradeLeg, contact: { id: string; name: string; e
     const clientBlock = {
       legalName: leg.counterpartyLegalName,
       ssi: leg.counterpartySSI ?? "-",
-      contact: contact.email,
+      contact: custodianContactEmail,
     };
     const buyerBlock = isClientBuy ? clientBlock : dealerBlock;
     const sellerBlock = isClientBuy ? dealerBlock : clientBlock;
@@ -631,9 +650,10 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const { legId, contactId, format, logOnly } = body as {
+  const { legId, contactId, custodianContactId, format, logOnly } = body as {
     legId?: string;
     contactId?: string;
+    custodianContactId?: string | null;
     format?: string;
     logOnly?: boolean;
   };
@@ -652,9 +672,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unsupported format. Use docx or pdf." }, { status: 400 });
   }
 
-  const [leg, contact, user] = await Promise.all([
+  const [leg, contact, custodianContact, user] = await Promise.all([
     fetchLegData(legId),
     fetchContact(contactId),
+    custodianContactId ? fetchCustodianContact(custodianContactId) : Promise.resolve(null),
     userId ? fetchUser(userId) : Promise.resolve({ name: "Unknown", email: "" }),
   ]);
 
@@ -667,12 +688,14 @@ export async function POST(req: NextRequest) {
 
   const ref = leg.tradeRef.replace(/[^a-zA-Z0-9-]/g, "_");
 
+  const custodianEmail = custodianContact?.email ?? "";
+
   if (format === "docx") {
-    fileBuffer = await generateDocx(leg, contact, user);
+    fileBuffer = await generateDocx(leg, contact, user, custodianEmail);
     contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     filename = `TradeTicket_${ref}.docx`;
   } else {
-    fileBuffer = await generatePdf(leg, contact, user);
+    fileBuffer = await generatePdf(leg, contact, user, custodianEmail);
     contentType = "application/pdf";
     filename = `TradeTicket_${ref}.pdf`;
   }

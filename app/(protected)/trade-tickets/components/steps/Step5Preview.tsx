@@ -8,6 +8,7 @@ import type { TradeLeg, ClientContact, AppUser } from "../../types";
 interface Props {
   leg: TradeLeg;
   contact: ClientContact;
+  custodianContact?: ClientContact | null;
   user: AppUser;
   onBack: () => void;
   onNext: () => void;
@@ -67,7 +68,7 @@ function MiniRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export default function Step5Preview({ leg, contact, user, onBack, onNext, ticketRef }: Props) {
+export default function Step5Preview({ leg, contact, custodianContact, user, onBack, onNext, ticketRef }: Props) {
   const internalRef = useRef<HTMLDivElement>(null);
   const ref = ticketRef ?? internalRef;
 
@@ -93,7 +94,7 @@ export default function Step5Preview({ leg, contact, user, onBack, onNext, ticke
       : `${user.name} · ${user.email}`;
 
   const dealerBlock = { legalName: leg.dealerLegalName, ssi: dealerSSIDisplay, contact: dealerContact };
-  const clientBlockData = { legalName: leg.counterpartyLegalName, ssi: leg.counterpartySSI ?? "—", contact: contact.email };
+  const clientBlockData = { legalName: leg.counterpartyLegalName, ssi: leg.counterpartySSI ?? "—", contact: custodianContact?.email ?? "" };
   const buyerBlock = isClientBuy ? clientBlockData : dealerBlock;
   const sellerBlock = isClientBuy ? dealerBlock : clientBlockData;
 
@@ -109,6 +110,7 @@ export default function Step5Preview({ leg, contact, user, onBack, onNext, ticke
         <TicketTemplate
           leg={leg}
           contact={contact}
+          custodianContact={custodianContact}
           user={user}
           containerRef={ref as React.RefObject<HTMLDivElement>}
         />

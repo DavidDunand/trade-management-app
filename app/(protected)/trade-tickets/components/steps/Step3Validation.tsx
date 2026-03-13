@@ -57,7 +57,8 @@ export default function Step3Validation({ leg, onBack, onNext }: Props) {
 
   useEffect(() => {
     runChecks();
-  }, [leg.clientId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leg.clientId, leg.counterpartyId]);
 
   async function runChecks() {
     setLoading(true);
@@ -81,6 +82,25 @@ export default function Step3Validation({ leg, onBack, onNext }: Props) {
       actionLabel: hasContactWithEmail ? undefined : "Add contact",
       actionHref: hasContactWithEmail ? undefined : "/advisors",
     });
+
+    // 1b. Custodian contact (warning — non-blocking)
+    if (leg.counterpartyId) {
+      const { data: cpContacts } = await supabase
+        .from("counterparty_contacts")
+        .select("id, email")
+        .eq("counterparty_id", leg.counterpartyId);
+      const cpRows = (cpContacts ?? []) as { id: string; email: string | null }[];
+      const hasCustodianContact = cpRows.some((c) => c.email && c.email.trim());
+      results.push({
+        label: "Custodian has at least one contact with an email address",
+        level: hasCustodianContact ? "ok" : "warning",
+        detail: hasCustodianContact
+          ? undefined
+          : "No email contact found for the custodian. The Contact field in Settlement Instructions will be empty.",
+        actionLabel: hasCustodianContact ? undefined : "Add custodian contact",
+        actionHref: hasCustodianContact ? undefined : "/counterparties",
+      });
+    }
 
     // 2. Client name is not empty
     const clientName = leg.counterpartyLegalName?.trim();
