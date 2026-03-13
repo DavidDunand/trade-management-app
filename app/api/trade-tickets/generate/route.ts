@@ -388,8 +388,7 @@ async function generateDocx(leg: TradeLeg, contact: { id: string; name: string; 
                 children: isValeur && valeurLogoPng
                   ? [new ImageRun({ data: valeurLogoPng, transformation: { width: 46, height: 53 }, type: "png" })]
                   : [
-                      new TextRun({ text: "RIVERROCK", color: WHITE, bold: true, size: 28, font: "Calibri" }),
-                      new TextRun({ text: " SECURITIES SAS", color: "A8B9D4", bold: false, size: 28, font: "Calibri" }),
+                      new TextRun({ text: entityLabel, color: WHITE, bold: true, size: 28, font: "Calibri" }),
                     ],
               }),
               new Paragraph({
@@ -556,7 +555,7 @@ async function generatePdf(leg: TradeLeg, contact: { id: string; name: string; e
       doc.fontSize(9).fillColor([168, 185, 212]).text("Trade Confirmation", MARGIN + 10, MARGIN + 57);
     } else {
       doc.fontSize(14).fillColor(WHITE);
-      doc.text("RIVERROCK", MARGIN + 10, MARGIN + 10, { continued: true }).fillColor([168, 185, 212]).text(" SECURITIES SAS");
+      doc.text(entityLabel, MARGIN + 10, MARGIN + 10);
       doc.fontSize(9).fillColor([168, 185, 212]).text("Trade Confirmation", MARGIN + 10, MARGIN + 28);
     }
     doc.fontSize(11).fillColor(WHITE).text(leg.isin, MARGIN, MARGIN + 10, { width: FULL_W - 10, align: "right" });
