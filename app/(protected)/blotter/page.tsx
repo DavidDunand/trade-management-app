@@ -1485,8 +1485,10 @@ if (distribEntityFilter !== "all" && (t.distributing_entity?.legal_name ?? "") !
     return arr;
   }, [filtered]);
 
-  // Reset to page 0 whenever filters change
-  useEffect(() => { setBlotterPage(0); }, [search, statusFilter, timeRange, tradeDateFrom, tradeDateTo, isinFilter, issuerFilter, ccyFilter, clientFilter, introducerFilter, salesFilter, bookingEntityFilter]);
+  // Reset to page 0 whenever the filtered/grouped set changes.
+  // Using `grouped` (a useMemo) as dep is stable — its reference only changes when
+  // actual filters change, avoiding false resets from array filter deps re-created each render.
+  useEffect(() => { setBlotterPage(0); }, [grouped]);
 
   const pagedGroups = useMemo(
     () => grouped.slice(blotterPage * PAGE_SIZE, (blotterPage + 1) * PAGE_SIZE),
