@@ -104,47 +104,45 @@ export default function Step5Preview({ leg, contact, user, onBack, onNext, ticke
         <p className="text-sm text-gray-500 mt-0.5">Review the ticket before generating the final document</p>
       </div>
 
-      <div className="flex gap-4 items-start">
-        {/* Ticket preview — centred, scrollable */}
-        <div className="flex-1 overflow-x-auto">
-          <TicketTemplate
-            leg={leg}
-            contact={contact}
-            user={user}
-            containerRef={ref as React.RefObject<HTMLDivElement>}
-          />
-        </div>
+      {/* Ticket preview — full width */}
+      <div className="overflow-x-auto">
+        <TicketTemplate
+          leg={leg}
+          contact={contact}
+          user={user}
+          containerRef={ref as React.RefObject<HTMLDivElement>}
+        />
+      </div>
 
-        {/* Right side panel */}
-        <div className="w-52 shrink-0 space-y-2">
-          <PanelSection title="Trade Data">
-            <MiniRow label="Reference" value={leg.tradeRef} />
-            <MiniRow label="ISIN" value={<span className="font-mono">{leg.isin}</span>} />
-            <MiniRow label="Trade Date" value={fmtDate(leg.tradeDate)} />
-            <MiniRow label="Value Date" value={fmtDate(leg.valueDate)} />
-            <MiniRow label="Currency" value={leg.currency} />
-            <MiniRow label={sizeLabel} value={sizeValue} />
-            <MiniRow label={priceLabel} value={priceValue} />
-            <MiniRow label="Net Amount" value={<span className="font-bold text-[#2E5FA3]">{leg.currency} {fmtNum(leg.netAmount)}</span>} />
-            <MiniRow label="Direction" value={
-              <span className={isClientBuy ? "text-green-700 font-bold" : "text-red-700 font-bold"}>
-                {isClientBuy ? "CLIENT BUY" : "CLIENT SELL"}
-              </span>
-            } />
-            <MiniRow label="Contact" value={`${contact.name} (${contact.email})`} />
-          </PanelSection>
+      {/* Trade Data + Settlement cards — side by side below the ticket */}
+      <div className="grid grid-cols-2 gap-3">
+        <PanelSection title="Trade Data">
+          <MiniRow label="Reference" value={leg.tradeRef} />
+          <MiniRow label="ISIN" value={<span className="font-mono">{leg.isin}</span>} />
+          <MiniRow label="Trade Date" value={fmtDate(leg.tradeDate)} />
+          <MiniRow label="Value Date" value={fmtDate(leg.valueDate)} />
+          <MiniRow label="Currency" value={leg.currency} />
+          <MiniRow label={sizeLabel} value={sizeValue} />
+          <MiniRow label={priceLabel} value={priceValue} />
+          <MiniRow label="Net Amount" value={<span className="font-bold text-[#2E5FA3]">{leg.currency} {fmtNum(leg.netAmount)}</span>} />
+          <MiniRow label="Direction" value={
+            <span className={isClientBuy ? "text-green-700 font-bold" : "text-red-700 font-bold"}>
+              {isClientBuy ? "CLIENT BUY" : "CLIENT SELL"}
+            </span>
+          } />
+          <MiniRow label="Contact" value={`${contact.name} (${contact.email})`} />
+        </PanelSection>
 
-          <PanelSection title="Settlement" defaultOpen={false}>
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-1">Buyer</p>
-            <MiniRow label="Legal Name" value={buyerBlock.legalName} />
-            <MiniRow label="SSI" value={buyerBlock.ssi} />
-            <MiniRow label="Contact" value={buyerBlock.contact} />
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-2">Seller</p>
-            <MiniRow label="Legal Name" value={sellerBlock.legalName} />
-            <MiniRow label="SSI" value={sellerBlock.ssi} />
-            <MiniRow label="Contact" value={sellerBlock.contact} />
-          </PanelSection>
-        </div>
+        <PanelSection title="Settlement" defaultOpen={true}>
+          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-1">Buyer</p>
+          <MiniRow label="Legal Name" value={buyerBlock.legalName} />
+          <MiniRow label="SSI" value={buyerBlock.ssi} />
+          <MiniRow label="Contact" value={buyerBlock.contact} />
+          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-2">Seller</p>
+          <MiniRow label="Legal Name" value={sellerBlock.legalName} />
+          <MiniRow label="SSI" value={sellerBlock.ssi} />
+          <MiniRow label="Contact" value={sellerBlock.contact} />
+        </PanelSection>
       </div>
 
       <div className="flex gap-3 pt-1">

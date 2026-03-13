@@ -109,7 +109,7 @@ export async function GET(
     clientName: t?.client_name ?? "-",
     bookingEntity,
     distributingEntity,
-    dealerLegalName: isDistValeur ? "Valeur Securities AG" : "RiverRock Securities SAS",
+    dealerLegalName: isDistValeur ? "Valeur Securities AG" : "RiverRock Securities SAS, France",
     // Valeur: hardcoded Euroclear SSI. RiverRock: opposite-direction leg's counterparty SSI
     dealerSSI: isDistValeur ? "Euroclear 41420" : dealerSSI,
     counterpartyLegalName: r.counterparty?.legal_name ?? "-",

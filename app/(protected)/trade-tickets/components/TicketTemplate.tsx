@@ -116,7 +116,7 @@ export default function TicketTemplate({ leg, contact, user, containerRef }: Pro
 
   const footerText = isValeur
     ? "This document has been produced by Valeur Securities AG"
-    : "This document has been produced by RiverRock Securities SAS";
+    : "This document has been produced by RiverRock Securities SAS, France";
 
   const directionBg = isClientBuy ? "#D1FAE5" : "#FEE2E2";
   const directionFg = isClientBuy ? "#065F46" : "#991B1B";
