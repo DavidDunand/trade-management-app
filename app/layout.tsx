@@ -1,7 +1,7 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Trade Management",
+  title: "Valeur Paris",
   description: "Internal trade management system",
 };
 

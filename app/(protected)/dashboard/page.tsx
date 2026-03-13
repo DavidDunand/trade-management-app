@@ -2,6 +2,7 @@
 export const dynamic = "force-dynamic";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ResponsiveContainer,
   BarChart,
@@ -30,7 +31,9 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   ArrowRight,
+  Mail,
 } from "lucide-react";
+import { downloadEmailReport, type EmailReportData } from "./emailReport";
 
 type Row = {
   id: string;
@@ -220,19 +223,24 @@ function KpiCard({
   value,
   sub,
   icon,
+  onClick,
 }: {
   label: string;
   value?: string;
   sub?: string;
   icon: React.ReactNode;
+  onClick?: () => void;
 }) {
+  const Tag = onClick ? "button" : "div";
   return (
-    <div
+    <Tag
+      onClick={onClick}
       className={[
         "rounded-3xl border border-zinc-200/70 dark:border-zinc-800/70",
         "bg-white dark:bg-zinc-950",
         "shadow-[0_10px_24px_rgba(0,0,0,0.06)]",
-        "px-5 py-4", // shorter than before
+        "px-5 py-4 text-left w-full",
+        onClick ? "cursor-pointer hover:shadow-lg hover:border-zinc-300/70 transition-shadow" : "",
       ].join(" ")}
     >
       <div className="flex items-start justify-between gap-3">
@@ -258,7 +266,7 @@ function KpiCard({
           {icon}
         </div>
       </div>
-    </div>
+    </Tag>
   );
 }
 
@@ -315,11 +323,13 @@ function ymKey(d: Date) {
 }
 
 export default function AnalyticsPage() {
+  const router = useRouter();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [year, setYear] = useState<string>("");
   const [sales, setSales] = useState<string>("All");
+  const [salesEmail, setSalesEmail] = useState<string>("trading@valeur.ch");
   const [periodMode, setPeriodMode] = useState<"month" | "quarter">("month");
   const [retroCcy, setRetroCcy] = useState<string>("All");
   const chartWrapRef = useRef<HTMLDivElement | null>(null);
@@ -418,6 +428,23 @@ useEffect(() => {
   useEffect(() => {
     if (!year && years.length) setYear(years[0]);
   }, [year, years]);
+
+  useEffect(() => {
+    if (sales === "All") {
+      setSalesEmail("trading@valeur.ch");
+      return;
+    }
+    // sales_name is stored as "first_name family_name" — fetch all and match
+    supabase
+      .from("sales_people")
+      .select("first_name, family_name, email")
+      .then(({ data }) => {
+        const match = (data as any[])?.find(
+          (p: any) => `${p.first_name} ${p.family_name}` === sales
+        );
+        setSalesEmail(match?.email ?? "trading@valeur.ch");
+      });
+  }, [sales]);
 
   const filtered = useMemo(() => {
     const y = Number(year);
@@ -831,6 +858,22 @@ const ccyGradients = useMemo(() => {
   }));
 }, [volumesByIssuerCurrency.currencies]);
 
+  const handleEmailReport = async () => {
+    const data: EmailReportData = {
+      year,
+      sales,
+      salesEmail,
+      pnlRows: pnlPeriodTable.monthRows,
+      pnlFullYear: pnlPeriodTable.fullYear,
+      pnlByBookingEntity,
+      pnlByTxnType,
+      clientsAll,
+      volumesByIssuerCurrency,
+      tradesByIssuer,
+    };
+    await downloadEmailReport(data);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-zinc-50 to-white dark:from-zinc-950 dark:to-zinc-950">
       <div className="p-6 space-y-6">
@@ -845,6 +888,13 @@ const ccyGradients = useMemo(() => {
           <div className="flex flex-wrap gap-3 items-end">
             <Select label="Year" value={year} options={years} onChange={setYear} />
             <Select label="Sales" value={sales} options={salesList} onChange={setSales} />
+            <button
+              onClick={handleEmailReport}
+              className="flex items-center gap-2 rounded-xl bg-[#002651] text-white px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              <Mail className="h-4 w-4" />
+              Email Report
+            </button>
           </div>
         </div>
 
@@ -867,6 +917,13 @@ const ccyGradients = useMemo(() => {
     value={loading ? "…" : formatInt(pendingTrades)}
     sub="awaiting booking"
     icon={<Hourglass className="h-5 w-5 text-[hsl(var(--primary))]" />}
+    onClick={() => {
+      const p = new URLSearchParams();
+      p.set("status", "pending");
+      if (year) { p.set("from", `${year}-01-01`); p.set("to", `${year}-12-31`); }
+      if (sales !== "All") p.set("sales", encodeURIComponent(sales));
+      router.push(`/blotter?${p.toString()}`);
+    }}
   />
 
   <KpiCard

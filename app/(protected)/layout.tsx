@@ -177,7 +177,7 @@ export default function ProtectedLayout({
 
   const docItems: NavItemDef[] = useMemo(
     () => [
-      { href: "/trade-tickets", label: "Trade Ticket", icon: FileText, adminOnly: true, disabled: true },
+      { href: "/trade-tickets", label: "Trade Tickets", icon: FileText, adminOnly: true },
       { href: "/transaction-reporting", label: "MiFID 2 Report", icon: FileSpreadsheet, adminOnly: true },
       { href: "/invoicing", label: "Invoicing", icon: FileSpreadsheet, adminOnly: true },
     ],
@@ -251,16 +251,16 @@ export default function ProtectedLayout({
             <div className="px-1 pb-3">
               <FxStatusPanel />
             </div>
-          </nav>
-        </div>
 
-        <div className="p-4 border-t border-white/10">
-          <button
-            onClick={signOut}
-            className="w-full rounded-xl bg-white text-[hsl(var(--primary))] py-2 text-[13px] font-medium hover:opacity-95"
-          >
-            Sign out
-          </button>
+            <div className="pb-3">
+              <button
+                onClick={signOut}
+                className="w-full rounded-xl bg-white text-[hsl(var(--primary))] py-2 text-[13px] font-medium hover:opacity-95"
+              >
+                Sign out
+              </button>
+            </div>
+          </nav>
         </div>
       </aside>
 

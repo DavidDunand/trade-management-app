@@ -839,7 +839,7 @@ const salesOptions = useMemo(
   const [statusFilterRaw, setStatusFilterRaw] = useUrlState("status", "all");
 
 const statusFilter =
-  statusFilterRaw as "all" | "pending" | "booked" | "cancelled" | "archived";
+  statusFilterRaw as "all" | "pending" | "booked" | "cancelled";
 
 const setStatusFilter = (v: typeof statusFilter) => {
   setStatusFilterRaw(v);
@@ -882,6 +882,10 @@ function presetClass(active: boolean) {
   // extra filters
   const [tradeDateFrom, setTradeDateFrom] = useUrlState("from", "");
   const [tradeDateTo, setTradeDateTo] = useUrlState("to", "");
+  const [bookingEntityFilterRaw, setBookingEntityFilterRaw] = useUrlState("entity", "all");
+  const bookingEntityFilter = bookingEntityFilterRaw;
+  const [distribEntityFilterRaw, setDistribEntityFilterRaw] = useUrlState("distrib", "all");
+  const distribEntityFilter = distribEntityFilterRaw;
   const [isinFilter, setIsinFilter] = useUrlState("isin", "");
   const [issuerFilterRaw, setIssuerFilterRaw] = useUrlState("issuer", "");
 
@@ -1374,6 +1378,9 @@ if (
   !salesFilter.includes(t.sales_name ?? "")
 ) return false;
 
+if (bookingEntityFilter !== "all" && (t.booking_entity?.legal_name ?? "") !== bookingEntityFilter) return false;
+if (distribEntityFilter !== "all" && (t.distributing_entity?.legal_name ?? "") !== distribEntityFilter) return false;
+
       if (!q) return true;
 
       const hay = [
@@ -1398,7 +1405,7 @@ if (
 
       return hay.includes(q);
     });
-  }, [rows, search, statusFilter, timeRange, tradeDateFrom, tradeDateTo, isinFilter, issuerFilter, ccyFilter, clientFilter, introducerFilter, salesFilter]);
+  }, [rows, search, statusFilter, timeRange, tradeDateFrom, tradeDateTo, isinFilter, issuerFilter, ccyFilter, clientFilter, introducerFilter, salesFilter, bookingEntityFilter]);
 
   const grouped: TradeGroup[] = useMemo(() => {
     const map = new Map<string, TradeGroup>();
@@ -1433,6 +1440,32 @@ if (
   const toggleTrade = (tradeId: string) => {
     setOpenTrades((prev) => ({ ...prev, [tradeId]: !prev[tradeId] }));
   };
+
+  const hasActiveFilters = !!(
+    isinFilter || issuerFilter.length || ccyFilter.length ||
+    clientFilter.length || introducerFilter.length || salesFilter.length ||
+    statusFilter !== "all" || bookingEntityFilter !== "all" || distribEntityFilter !== "all" ||
+    tradeDateFrom || tradeDateTo
+  );
+
+  function clearAllFilters() {
+    // All filters live in the URL — reset in a single replace to avoid race conditions
+    setSearch("");
+    router.replace("?", { scroll: false });
+  }
+
+  // Active filter chips for display
+  const activeFilterChips: { label: string; onRemove: () => void }[] = [];
+  if (statusFilter !== "all") activeFilterChips.push({ label: `Status: ${statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}`, onRemove: () => setStatusFilterRaw("all") });
+  if (bookingEntityFilter !== "all") activeFilterChips.push({ label: `Booking Entity: ${bookingEntityFilter.includes("RiverRock") ? "RiverRock" : "Valeur Securities"}`, onRemove: () => setBookingEntityFilterRaw("all") });
+  if (distribEntityFilter !== "all") activeFilterChips.push({ label: `Distribution Entity: ${distribEntityFilter.includes("RiverRock") ? "RiverRock" : "Valeur Securities"}`, onRemove: () => setDistribEntityFilterRaw("all") });
+  if (isinFilter) activeFilterChips.push({ label: `ISIN: ${isinFilter}`, onRemove: () => setIsinFilter("") });
+  for (const v of issuerFilter) activeFilterChips.push({ label: `Issuer: ${v}`, onRemove: () => setIssuerFilterRaw(stringifyMulti(issuerFilter.filter((x) => x !== v))) });
+  for (const v of ccyFilter) activeFilterChips.push({ label: `CCY: ${v}`, onRemove: () => setCcyFilterRaw(stringifyMulti(ccyFilter.filter((x) => x !== v))) });
+  for (const v of clientFilter) activeFilterChips.push({ label: `Client: ${v}`, onRemove: () => setClientFilterRaw(stringifyMulti(clientFilter.filter((x) => x !== v))) });
+  for (const v of introducerFilter) activeFilterChips.push({ label: `Introducer: ${v}`, onRemove: () => setIntroducerFilterRaw(stringifyMulti(introducerFilter.filter((x) => x !== v))) });
+  for (const v of salesFilter) activeFilterChips.push({ label: `Sales: ${v}`, onRemove: () => setSalesFilterRaw(stringifyMulti(salesFilter.filter((x) => x !== v))) });
+  if (tradeDateFrom || tradeDateTo) activeFilterChips.push({ label: `Date: ${tradeDateFrom || "…"} → ${tradeDateTo || "…"}`, onRemove: () => { setTradeDateFrom(""); setTradeDateTo(""); } });
 
   const HEADER_BG = "bg-[#002651]";
   const TRADE_BG = "bg-[#DEE7F0]";
@@ -1474,18 +1507,6 @@ if (
         </div>
 
         <div className="flex items-center gap-3">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="rounded-xl border border-black/20 px-3 py-2 bg-white text-sm font-bold"
-          >
-            <option value="all">All</option>
-            <option value="pending">Pending</option>
-            <option value="booked">Booked</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="archived">Archived</option>
-          </select>
-
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -1511,8 +1532,59 @@ if (
       </div>
 
       {/* Filters row */}
-      <div className="rounded-2xl border border-black/10 p-4 bg-white">
-       <div className="rounded-2xl border border-black/10 p-4 bg-white space-y-3">
+      <div className="rounded-2xl border border-black/10 p-4 bg-white space-y-3">
+
+  {/* ROW 0 — STATUS + BOOKING ENTITY + ACTIVE FILTERS */}
+  <div className="flex items-center gap-3 flex-wrap">
+    <select
+      value={statusFilter}
+      onChange={(e) => setStatusFilter(e.target.value as any)}
+      className="rounded-xl border border-black/20 px-3 py-2 bg-white text-sm font-bold"
+    >
+      <option value="all">All statuses</option>
+      <option value="pending">Pending</option>
+      <option value="booked">Booked</option>
+      <option value="cancelled">Cancelled</option>
+    </select>
+
+    <select
+      value={bookingEntityFilter}
+      onChange={(e) => setBookingEntityFilterRaw(e.target.value)}
+      className="rounded-xl border border-black/20 px-3 py-2 bg-white text-sm font-bold"
+    >
+      <option value="all">All booking entities</option>
+      <option value="RiverRock Securities SAS, France">RiverRock Securities SAS, France</option>
+      <option value="Valeur Securities AG, Switzerland">Valeur Securities AG, Switzerland</option>
+    </select>
+
+    <select
+      value={distribEntityFilter}
+      onChange={(e) => setDistribEntityFilterRaw(e.target.value)}
+      className="rounded-xl border border-black/20 px-3 py-2 bg-white text-sm font-bold"
+    >
+      <option value="all">All distribution entities</option>
+      <option value="RiverRock Securities SAS, France">RiverRock Securities SAS, France</option>
+      <option value="Valeur Securities AG, Switzerland">Valeur Securities AG, Switzerland</option>
+    </select>
+
+    {hasActiveFilters && (
+      <button onClick={clearAllFilters} className="ml-1 text-xs font-bold text-black/40 hover:text-black underline">
+        Clear all
+      </button>
+    )}
+  </div>
+
+  {/* ACTIVE FILTER CHIPS */}
+  {activeFilterChips.length > 0 && (
+    <div className="flex flex-wrap gap-1.5">
+      {activeFilterChips.map((chip) => (
+        <span key={chip.label} className="inline-flex items-center gap-1 rounded-full bg-[#002651]/10 text-[#002651] text-[11px] font-bold px-2.5 py-1">
+          {chip.label}
+          <button onClick={chip.onRemove} className="ml-0.5 hover:opacity-60" aria-label="Remove filter">×</button>
+        </span>
+      ))}
+    </div>
+  )}
 
   {/* ROW 1 — COLUMN FILTERS */}
   <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
@@ -1705,7 +1777,6 @@ if (
 
   </div>
 
-</div>
       </div>
 
       <div className="rounded-2xl border border-black/10 overflow-hidden relative">

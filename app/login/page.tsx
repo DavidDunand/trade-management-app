@@ -29,9 +29,10 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-white flex items-center justify-center px-4">
       <div className="w-full max-w-md border border-black/10 rounded-2xl overflow-hidden shadow-sm">
-        <div className="bg-[#002651] px-6 py-5">
-          <div className="text-white text-xl font-semibold">Trade Management</div>
-          <div className="text-white/80 text-sm">Sign in to continue</div>
+        <div className="bg-[#002651] px-6 py-8 flex flex-col items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/valeur-logo.svg" alt="Valeur Paris" className="h-28 w-auto brightness-0 invert" />
+          <p className="text-white/70 text-sm tracking-wide">Sign in to continue</p>
         </div>
 
         <form onSubmit={signIn} className="p-6 space-y-4">
