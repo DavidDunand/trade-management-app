@@ -831,9 +831,30 @@ const salesOptions = useMemo(
   [rows]
 )
   // Edit / Clone modal (uses NewTradeForm as modal)
-  const [tradeModalOpen, setTradeModalOpen] = useState(false);
-  const [tradeModalMode, setTradeModalMode] = useState<ModalMode>("edit");
-  const [tradeModalSourceId, setTradeModalSourceId] = useState<string | null>(null);
+  // Persist modal context so it survives page reload (tab switch / browser minimize)
+  const MODAL_CTX_KEY = "blotter-modal-ctx";
+  const [tradeModalOpen, setTradeModalOpen] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem("blotter-modal-ctx");
+      if (!raw) return false;
+      const ctx = JSON.parse(raw);
+      // Only reopen if a draft exists for that trade
+      const draftKey = `trade-form-${ctx.mode}-${ctx.tradeId}`;
+      return !!localStorage.getItem(draftKey);
+    } catch { return false; }
+  });
+  const [tradeModalMode, setTradeModalMode] = useState<ModalMode>(() => {
+    try {
+      const raw = sessionStorage.getItem("blotter-modal-ctx");
+      return raw ? (JSON.parse(raw).mode ?? "edit") : "edit";
+    } catch { return "edit"; }
+  });
+  const [tradeModalSourceId, setTradeModalSourceId] = useState<string | null>(() => {
+    try {
+      const raw = sessionStorage.getItem("blotter-modal-ctx");
+      return raw ? (JSON.parse(raw).tradeId ?? null) : null;
+    } catch { return null; }
+  });
 
   const [search, setSearch] = useState("");
   const [statusFilterRaw, setStatusFilterRaw] = useUrlState("status", "all");
@@ -1231,15 +1252,22 @@ if (locked) {
   }
 
   function openEdit(tradeId: string) {
+    sessionStorage.setItem(MODAL_CTX_KEY, JSON.stringify({ mode: "edit", tradeId }));
     setTradeModalMode("edit");
     setTradeModalSourceId(tradeId);
     setTradeModalOpen(true);
   }
 
   function openClone(tradeId: string) {
+    sessionStorage.setItem(MODAL_CTX_KEY, JSON.stringify({ mode: "clone", tradeId }));
     setTradeModalMode("clone");
     setTradeModalSourceId(tradeId);
     setTradeModalOpen(true);
+  }
+
+  function closeTradeModal() {
+    sessionStorage.removeItem(MODAL_CTX_KEY);
+    setTradeModalOpen(false);
   }
 
   async function removePendingTrade(tradeId: string) {
@@ -2228,9 +2256,9 @@ if (distribEntityFilter !== "all" && (t.distributing_entity?.legal_name ?? "") !
           mode={tradeModalMode}
           sourceTradeId={tradeModalSourceId}
           variant="modal"
-          onCancel={() => setTradeModalOpen(false)}
+          onCancel={() => closeTradeModal()}
           onSaved={() => {
-            setTradeModalOpen(false);
+            closeTradeModal();
             fetchRows();
           }}
         />

@@ -168,6 +168,12 @@ export default function NewTradeForm({
     { id: uid(), side: "sell", counterparty_id: "", counterparty_text: "", size: "" },
   ]);
 
+  // Draft persistence
+  const draftKey = `trade-form-${mode}-${sourceTradeId ?? "new"}`;
+  const [tradeDataLoaded, setTradeDataLoaded] = useState(mode === "new");
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const [showDraftBanner, setShowDraftBanner] = useState(false);
+
   const selectedProduct = useMemo(() => products.find((p) => p.id === productId) ?? null, [products, productId]);
   const selectedBookingEntity = useMemo(
     () => entities.find((e) => e.id === bookingEntityId) ?? null,
@@ -243,8 +249,9 @@ const canSave =
   !!bookingEntityId &&
   !!distributingEntityId &&
   !!salesName.trim() &&
-  isValidName(clientName, clients.map(c => c.legal_name)) &&
-  isValidName(introducerName, introducers.map(i => i.legal_name)) &&
+  // clientName / introducerName are optional — allow empty, but block if filled with invalid value
+  (!clientName.trim() || isValidName(clientName, clients.map(c => c.legal_name))) &&
+  (!introducerName.trim() || isValidName(introducerName, introducers.map(i => i.legal_name))) &&
   isValidName(salesName, salesPeople.map(s => `${s.first_name} ${s.family_name}`)) &&
   totalSizeNum > 0 &&
   sellerPriceNum !== null &&
@@ -290,6 +297,13 @@ const canSave =
   // load trade for edit/clone (page or modal)
   useEffect(() => {
     if (!sourceTradeId) return;
+
+    // If a saved draft exists, skip the DB fetch entirely —
+    // the restore effect will populate the form from the draft instead.
+    if (localStorage.getItem(draftKey)) {
+      setTradeDataLoaded(true);
+      return;
+    }
 
     (async () => {
       setLoading(true);
@@ -402,10 +416,11 @@ if (isUnwind) {
             ]
       );
 
+      setTradeDataLoaded(true);
       setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceTradeId, products, counterparties]);
+  }, [sourceTradeId, products, counterparties, draftKey]);
 
   // contacts: client
   useEffect(() => {
@@ -477,6 +492,70 @@ if (isUnwind) {
       .slice(0, 20);
   }, [isinInput, products]);
 
+  // Restore draft after all data is loaded
+  useEffect(() => {
+    if (!tradeDataLoaded || loading || draftLoaded) return;
+    const saved = localStorage.getItem(draftKey);
+    if (saved) {
+      try {
+        const d = JSON.parse(saved);
+        // Only restore if the draft has meaningful content
+        if (d.isinInput || d.tradeDate || d.salesName || d.clientName) {
+          setIsinInput(d.isinInput ?? "");
+          setProductId(d.productId ?? "");
+          setTradeDate(d.tradeDate ?? "");
+          setValueDate(d.valueDate ?? "");
+          setTransactionType(d.transactionType ?? "primary");
+          setSellerPrice(d.sellerPrice ?? "");
+          setBuyerPrice(d.buyerPrice ?? "");
+          setTotalSize(d.totalSize ?? "");
+          setBookingEntityId(d.bookingEntityId ?? "");
+          setDistributingEntityId(d.distributingEntityId ?? "");
+          setBookingTimestamp(d.bookingTimestamp ?? "");
+          setReportable(!!d.reportable);
+          setRetroClientInput(d.retroClientInput ?? "");
+          setRetroIntroducerInput(d.retroIntroducerInput ?? "");
+          setFeeCustodianInput(d.feeCustodianInput ?? "");
+          setClientName(d.clientName ?? "");
+          setIntroducerName(d.introducerName ?? "");
+          setSalesName(d.salesName ?? "");
+          setClientContactId(d.clientContactId ?? "");
+          setIntroducerContactId(d.introducerContactId ?? "");
+          if (Array.isArray(d.legs) && d.legs.length > 0) setLegs(d.legs);
+          setShowDraftBanner(true);
+        }
+      } catch {
+        localStorage.removeItem(draftKey);
+      }
+    }
+    setDraftLoaded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tradeDataLoaded, loading, draftLoaded, draftKey]);
+
+  // Save draft to localStorage (debounced 500ms) once form is ready
+  useEffect(() => {
+    if (!draftLoaded) return;
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(draftKey, JSON.stringify({
+          isinInput, productId, tradeDate, valueDate, transactionType,
+          sellerPrice, buyerPrice, totalSize, bookingEntityId, distributingEntityId,
+          bookingTimestamp, reportable, retroClientInput, retroIntroducerInput,
+          feeCustodianInput, clientName, introducerName, salesName,
+          clientContactId, introducerContactId, legs,
+        }));
+      } catch { /* quota exceeded — ignore */ }
+    }, 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    draftLoaded, draftKey, isinInput, productId, tradeDate, valueDate, transactionType,
+    sellerPrice, buyerPrice, totalSize, bookingEntityId, distributingEntityId,
+    bookingTimestamp, reportable, retroClientInput, retroIntroducerInput,
+    feeCustodianInput, clientName, introducerName, salesName,
+    clientContactId, introducerContactId, legs,
+  ]);
+
   function setLegField(id: string, patch: Partial<LegDraft>) {
     setLegs((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   }
@@ -489,8 +568,14 @@ if (isUnwind) {
     setLegs((prev) => prev.filter((l) => l.id !== id));
   }
 
+  function discardDraft() {
+    localStorage.removeItem(draftKey);
+    setShowDraftBanner(false);
+  }
+
   async function save() {
     if (!canSave) return;
+    localStorage.removeItem(draftKey);
 
     setSaving(true);
 
@@ -592,10 +677,25 @@ if (isUnwind) {
           <div className="text-lg font-semibold">{title}</div>
           <div className="text-xs text-white/80">Status: Pending</div>
         </div>
-        <button onClick={onCancel} className="rounded-lg bg-white/10 px-3 py-1 text-sm hover:bg-white/15">
+        <button onClick={() => { discardDraft(); onCancel(); }} className="rounded-lg bg-white/10 px-3 py-1 text-sm hover:bg-white/15">
           Close
         </button>
       </div>
+
+      {showDraftBanner && (
+        <div className="mx-5 mt-4 flex items-center justify-between rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-800">
+          <span>⚠ Unsaved draft recovered — your previous entries have been restored.</span>
+          <button
+            onClick={() => {
+              discardDraft();
+              window.location.reload();
+            }}
+            className="ml-4 shrink-0 rounded-lg border border-amber-400 px-3 py-1 text-xs hover:bg-amber-100"
+          >
+            Discard &amp; reset
+          </button>
+        </div>
+      )}
 
       <div className="p-5 space-y-4 bg-black/[0.02]">
         {loading ? (
@@ -627,6 +727,12 @@ if (isUnwind) {
                       </option>
                     ))}
                   </datalist>
+
+                  {isinInput.trim() && !productId && !loading && (
+                    <div className="mt-1 text-xs font-bold text-red-600">
+                      No product found for this ISIN — check the value or add the product first.
+                    </div>
+                  )}
 
                   {selectedProduct && (
                     <div className="mt-2 text-xs text-black/70">
@@ -1025,7 +1131,7 @@ if (isUnwind) {
             {/* Footer */}
             <div className="flex items-center justify-between pt-1">
               <button
-                onClick={onCancel}
+                onClick={() => { discardDraft(); onCancel(); }}
                 className="rounded-xl border border-black/20 px-5 py-2 text-sm font-bold hover:bg-black/5 bg-white"
               >
                 Cancel
