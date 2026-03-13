@@ -246,12 +246,15 @@ function buildStackedBarsSvg(
 function legendStrip(
   items: { label: string; color: string; value?: string }[]
 ): string {
+  // Use a colored ● character instead of a background-colored empty span —
+  // background: on empty elements is stripped by Outlook and many clients,
+  // but the `color:` property on a text node survives reliably.
   return items
     .map(
       (x) =>
-        `<span style="display:inline-flex;align-items:center;gap:5px;margin:0 14px 6px 0;">` +
-        `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${x.color};flex-shrink:0;"></span>` +
-        `<span style="font-size:11px;color:#6b7280;">${esc(x.label)}${x.value ? ": " + x.value : ""}</span>` +
+        `<span style="display:inline-block;margin:0 14px 6px 0;white-space:nowrap;vertical-align:middle;">` +
+        `<span style="color:${x.color};font-size:13px;line-height:1;vertical-align:middle;">&#9679;</span>` +
+        `<span style="font-size:11px;color:#6b7280;margin-left:4px;vertical-align:middle;">${esc(x.label)}${x.value ? ": " + x.value : ""}</span>` +
         `</span>`
     )
     .join("");
