@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import type { TradeLeg, BookingEntity } from "@/app/(protected)/trade-tickets/types";
+import type { TradeLeg } from "@/app/(protected)/trade-tickets/types";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,13 +22,6 @@ function fmtDate(iso: string | null | undefined): string {
 function fmtNumber(n: number | null | undefined, decimals = 2): string {
   if (n == null || !Number.isFinite(n)) return "-";
   return n.toLocaleString("en-CH", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-}
-
-function resolveBookingEntity(legalName: string): BookingEntity {
-  if (legalName.toLowerCase().includes("valeur")) {
-    return "Valeur Securities AG, Switzerland";
-  }
-  return "RiverRock Securities SAS, France";
 }
 
 function computeNetAmount(leg: Partial<TradeLeg>): number {
@@ -78,8 +71,8 @@ async function fetchLegData(legId: string): Promise<TradeLeg | null> {
           first_name,
           family_name
         ),
-        booking_entity:booking_entity_id(legal_name),
-        distributing_entity:distributing_entity_id(legal_name),
+        booking_entity:booking_entity_id(legal_name, entity_type, ssi),
+        distributing_entity:distributing_entity_id(id, legal_name, entity_type, ssi, short_name),
         product:product_id(isin, product_name, currency, settlement)
       )
     `
@@ -91,10 +84,10 @@ async function fetchLegData(legId: string): Promise<TradeLeg | null> {
   const r = data as any;
   const t = r.trade;
   const p = t?.product;
-  const bookingEntity = resolveBookingEntity(t?.booking_entity?.legal_name ?? "");
-  // Distributing entity drives template — header, footer, dealer SSI block
-  const distributingEntity = resolveBookingEntity(t?.distributing_entity?.legal_name ?? "");
-  const isDistValeur = distributingEntity === "Valeur Securities AG, Switzerland";
+  const bookingEntity: string = t?.booking_entity?.legal_name ?? "-";
+  const distributingEntity: string = t?.distributing_entity?.legal_name ?? "-";
+  const distributingEntityType: string = t?.distributing_entity?.entity_type ?? "other";
+  const isDistValeur = distributingEntityType === "valeur";
   const direction: "buy" | "sell" = r.leg === "buy" ? "buy" : "sell";
   const clientPrice = direction === "sell" ? (t?.sell_price ?? undefined) : (t?.buy_price ?? undefined);
   const size: number = r.size ?? 0;
@@ -123,7 +116,27 @@ async function fetchLegData(legId: string): Promise<TradeLeg | null> {
     dealerSSI = (dealerLegData as any)?.counterparty?.ssi ?? undefined;
   }
 
-  const advisorId: string = r.trade?.client_contact?.advisor_id ?? "";
+  // Fetch dealer contacts from group_entity_contacts
+  const { data: entityContactRows } = await supabase
+    .from("group_entity_contacts")
+    .select("email")
+    .eq("group_entity_id", t?.distributing_entity?.id ?? "")
+    .not("email", "is", null);
+  const dealerContacts = (entityContactRows ?? [])
+    .map((c: any) => c.email as string)
+    .filter(Boolean)
+    .join(" | ");
+
+  // Resolve clientId: prefer the contact's advisor_id, fall back to advisor lookup by client_name
+  let clientId: string = t?.client_contact?.advisor_id ?? "";
+  if (!clientId && t?.client_name) {
+    const { data: advisorRow } = await supabase
+      .from("advisors")
+      .select("id")
+      .eq("legal_name", t.client_name)
+      .maybeSingle();
+    clientId = (advisorRow as any)?.id ?? "";
+  }
 
   return {
     id: r.id,
@@ -142,13 +155,17 @@ async function fetchLegData(legId: string): Promise<TradeLeg | null> {
     clientName: t?.client_name ?? "-",
     bookingEntity,
     distributingEntity,
-    dealerLegalName: isDistValeur ? "Valeur Securities AG, Switzerland" : "RiverRock Securities SAS, France",
-    // Valeur: hardcoded Euroclear SSI. RiverRock: opposite-direction leg's counterparty SSI
-    dealerSSI: isDistValeur ? "Euroclear 41420" : dealerSSI,
+    dealerLegalName: t?.distributing_entity?.legal_name ?? "-",
+    // Valeur: SSI from group_entities.ssi (fallback "Euroclear 41420"). RiverRock: opposite-direction leg's counterparty SSI
+    dealerSSI: isDistValeur ? (t?.distributing_entity?.ssi ?? "Euroclear 41420") : dealerSSI,
     counterpartyLegalName: r.counterparty?.legal_name ?? "-",
     counterpartySSI: r.counterparty?.ssi ?? undefined,
     counterpartyId: r.counterparty_id ?? undefined,
-    clientId: advisorId,
+    clientId,
+    distributingEntityType,
+    dealerSsi: t?.distributing_entity?.ssi ?? undefined,
+    dealerContacts: dealerContacts || undefined,
+    dealerShortName: t?.distributing_entity?.short_name ?? undefined,
   };
 }
 
@@ -220,7 +237,7 @@ async function generateDocx(leg: TradeLeg, contact: { id: string; name: string; 
     AlignmentType, BorderStyle, WidthType, ShadingType, VerticalAlign,
   } = await import("docx");
 
-  const isValeur = leg.distributingEntity === "Valeur Securities AG, Switzerland";
+  const isValeur = leg.distributingEntityType === "valeur";
 
   // For Valeur: rasterise the logo SVG to a white-path PNG for embedding
   const valeurLogoPng = isValeur ? await getValeurLogoWhitePng(60) : null;
@@ -312,9 +329,9 @@ async function generateDocx(leg: TradeLeg, contact: { id: string; name: string; 
   // Buyer / Seller blocks
   const dealerBlock = {
     legalName: leg.dealerLegalName,
-    ssi: isValeur ? "Euroclear 41420" : (leg.dealerSSI ?? "-"),
+    ssi: leg.dealerSsi ?? leg.dealerSSI ?? "-",
     contact: isValeur
-      ? "jacopo.bini@valeur.ch | andrea.coia@valeur.ch"
+      ? (leg.dealerContacts ?? "")
       : `${user.name} \u00B7 ${user.email}`,
   };
   const clientBlock = {
@@ -327,10 +344,8 @@ async function generateDocx(leg: TradeLeg, contact: { id: string; name: string; 
   const sellerBlock = isClientBuy ? dealerBlock : clientBlock;
 
   // Entity label
-  const entityLabel = isValeur ? "VALEUR SECURITIES AG" : "RIVERROCK SECURITIES SAS";
-  const footerText = isValeur
-    ? "This document has been produced by Valeur Securities AG"
-    : "This document has been produced by RiverRock Securities SAS";
+  const entityLabel = leg.dealerShortName ?? leg.dealerLegalName.toUpperCase();
+  const footerText = `This document has been produced by ${leg.dealerLegalName}`;
 
   function ssiBlock(title: string, block: { legalName: string; ssi: string; contact: string }) {
     return [
@@ -506,7 +521,7 @@ async function generateDocx(leg: TradeLeg, contact: { id: string; name: string; 
 async function generatePdf(leg: TradeLeg, contact: { id: string; name: string; email: string }, user: { name: string; email: string }, custodianContactEmail: string): Promise<Buffer> {
   const PDFDocument = (await import("pdfkit")).default;
 
-  const isValeur = leg.distributingEntity === "Valeur Securities AG, Switzerland";
+  const isValeur = leg.distributingEntityType === "valeur";
   const isClientBuy = leg.direction === "sell";
 
   // For Valeur: rasterise the logo SVG to a white-path PNG for embedding
@@ -602,8 +617,8 @@ async function generatePdf(leg: TradeLeg, contact: { id: string; name: string; e
     // Settlement
     const dealerBlock = {
       legalName: leg.dealerLegalName,
-      ssi: isValeur ? "Euroclear 41420" : (leg.dealerSSI ?? "-"),
-      contact: isValeur ? "jacopo.bini@valeur.ch | andrea.coia@valeur.ch" : `${user.name} \u00B7 ${user.email}`,
+      ssi: leg.dealerSsi ?? leg.dealerSSI ?? "-",
+      contact: isValeur ? (leg.dealerContacts ?? "") : `${user.name} \u00B7 ${user.email}`,
     };
     const clientBlock = {
       legalName: leg.counterpartyLegalName,
@@ -624,9 +639,7 @@ async function generatePdf(leg: TradeLeg, contact: { id: string; name: string; e
     drawDataRow("Contact", sellerBlock.contact, y); y += 30;
 
     // Footer
-    const footerText = isValeur
-      ? "This document has been produced by Valeur Securities AG"
-      : "This document has been produced by RiverRock Securities SAS";
+    const footerText = `This document has been produced by ${leg.dealerLegalName}`;
     doc.fontSize(8).fillColor(MUTED).text(footerText, MARGIN, y, { width: FULL_W, align: "center" });
 
     doc.end();
