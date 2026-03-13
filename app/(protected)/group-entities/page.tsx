@@ -217,7 +217,6 @@ export default function GroupEntitiesPage() {
               <th className="p-3 font-semibold text-black/80">Legal Name</th>
               <th className="p-3 font-semibold text-black/80">Short Name</th>
               <th className="p-3 font-semibold text-black/80">SSI</th>
-              <th className="p-3 font-semibold text-black/80 w-32">Type</th>
               <th className="p-3 w-44" />
             </tr>
           </thead>
@@ -260,9 +259,6 @@ export default function GroupEntitiesPage() {
                     ) : (
                       <span className="text-black/70 font-mono text-xs">{e.ssi ?? "-"}</span>
                     )}
-                  </td>
-                  <td className="p-3">
-                    <EntityTypeBadge type={e.entity_type} />
                   </td>
                   <td className="p-3">
                     {isEdit ? (
@@ -308,7 +304,7 @@ export default function GroupEntitiesPage() {
             })}
             {entities.length === 0 && (
               <tr>
-                <td colSpan={5} className="p-6 text-black/60">
+                <td colSpan={4} className="p-6 text-black/60">
                   {loading ? "Loading…" : "No entities found."}
                 </td>
               </tr>
@@ -497,7 +493,7 @@ export default function GroupEntitiesPage() {
                     })}
                     {contacts.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="p-6 text-black/60">
+                        <td colSpan={4} className="p-6 text-black/60">
                           No contacts yet. Add one above.
                         </td>
                       </tr>
