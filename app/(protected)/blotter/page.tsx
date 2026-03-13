@@ -1485,10 +1485,20 @@ if (distribEntityFilter !== "all" && (t.distributing_entity?.legal_name ?? "") !
     return arr;
   }, [filtered]);
 
-  // Reset to page 0 whenever the filtered/grouped set changes.
-  // Using `grouped` (a useMemo) as dep is stable — its reference only changes when
-  // actual filters change, avoiding false resets from array filter deps re-created each render.
-  useEffect(() => { setBlotterPage(0); }, [grouped]);
+  // Build a stable primitive string from all active filters.
+  // getMulti() returns new array refs every render, so we can't use those arrays
+  // as useEffect deps — React compares by reference and would fire on every render.
+  // Strings compare by value, so this only triggers when filters actually change.
+  const blotterFilterKey = [
+    search, statusFilter, timeRange, tradeDateFrom, tradeDateTo, isinFilter,
+    searchParams.get("issuer") ?? "",
+    searchParams.get("ccy") ?? "",
+    searchParams.get("client") ?? "",
+    searchParams.get("introducer") ?? "",
+    searchParams.get("sales") ?? "",
+    searchParams.get("bookingEntity") ?? "",
+  ].join("|");
+  useEffect(() => { setBlotterPage(0); }, [blotterFilterKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pagedGroups = useMemo(
     () => grouped.slice(blotterPage * PAGE_SIZE, (blotterPage + 1) * PAGE_SIZE),
