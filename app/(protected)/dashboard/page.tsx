@@ -31,7 +31,9 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   ArrowRight,
+  Mail,
 } from "lucide-react";
+import { downloadEmailReport, type EmailReportData } from "./emailReport";
 
 type Row = {
   id: string;
@@ -838,6 +840,21 @@ const ccyGradients = useMemo(() => {
   }));
 }, [volumesByIssuerCurrency.currencies]);
 
+  const handleEmailReport = () => {
+    const data: EmailReportData = {
+      year,
+      sales,
+      pnlRows: pnlPeriodTable.monthRows,
+      pnlFullYear: pnlPeriodTable.fullYear,
+      pnlByBookingEntity,
+      pnlByTxnType,
+      clientsAll,
+      volumesByIssuerCurrency,
+      tradesByIssuer,
+    };
+    downloadEmailReport(data);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-zinc-50 to-white dark:from-zinc-950 dark:to-zinc-950">
       <div className="p-6 space-y-6">
@@ -852,6 +869,13 @@ const ccyGradients = useMemo(() => {
           <div className="flex flex-wrap gap-3 items-end">
             <Select label="Year" value={year} options={years} onChange={setYear} />
             <Select label="Sales" value={sales} options={salesList} onChange={setSales} />
+            <button
+              onClick={handleEmailReport}
+              className="flex items-center gap-2 rounded-xl bg-[#002651] text-white px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              <Mail className="h-4 w-4" />
+              Email Report
+            </button>
           </div>
         </div>
 
