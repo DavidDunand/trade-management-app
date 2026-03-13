@@ -191,6 +191,7 @@ export default function ProtectedLayout({
       { href: "/counterparties", label: "Counterparties", icon: Handshake, adminOnly: true },
       { href: "/advisors", label: "Clients", icon: Users, adminOnly: true },
       { href: "/sales", label: "Sales", icon: BriefcaseBusiness, adminOnly: true },
+      { href: "/group-entities", label: "Group Entities", icon: Building2, adminOnly: true },
     ],
     []
   );

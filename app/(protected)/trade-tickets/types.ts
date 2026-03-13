@@ -1,8 +1,6 @@
 // ─── Core domain types ────────────────────────────────────────────────────────
 
-export type BookingEntity =
-  | "Valeur Securities AG, Switzerland"
-  | "RiverRock Securities SAS, France";
+export type BookingEntity = string;
 
 export type SettlementType = "percent" | "units";
 
@@ -38,6 +36,14 @@ export interface TradeLeg {
   /** ID of the trade leg's counterparty (custodian) — used to fetch their contacts */
   counterpartyId?: string;
   clientId: string;
+  /** entity_type from group_entities: 'valeur' | 'riverrock' | 'other' — drives template selection */
+  distributingEntityType: string;
+  /** Dealer SSI from group_entities.ssi (e.g. "Euroclear 41420" for Valeur) */
+  dealerSsi?: string;
+  /** Dealer contacts from group_entity_contacts, formatted as "email1 | email2" */
+  dealerContacts?: string;
+  /** Short display name from group_entities.short_name (e.g. "VALEUR SECURITIES AG") */
+  dealerShortName?: string;
 }
 
 export interface ClientContact {

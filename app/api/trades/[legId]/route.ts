@@ -3,18 +3,12 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import type { TradeLeg, BookingEntity } from "@/app/(protected)/trade-tickets/types";
+import type { TradeLeg } from "@/app/(protected)/trade-tickets/types";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
-
-function resolveBookingEntity(legalName: string): BookingEntity {
-  return legalName.toLowerCase().includes("valeur")
-    ? "Valeur Securities AG, Switzerland"
-    : "RiverRock Securities SAS, France";
-}
 
 function computeNetAmount(settlementType: string, size: number, price: number): number {
   if (settlementType === "units") return size * price;
@@ -51,8 +45,8 @@ export async function GET(
           first_name,
           family_name
         ),
-        booking_entity:booking_entity_id(legal_name),
-        distributing_entity:distributing_entity_id(legal_name),
+        booking_entity:booking_entity_id(legal_name, entity_type, ssi),
+        distributing_entity:distributing_entity_id(id, legal_name, entity_type, ssi, short_name),
         product:product_id(isin, product_name, currency, settlement)
       )
     `
@@ -67,10 +61,10 @@ export async function GET(
   const r = data as any;
   const t = r.trade;
   const p = t?.product;
-  const bookingEntity = resolveBookingEntity(t?.booking_entity?.legal_name ?? "");
-  // Distributing entity drives the template (header, footer, dealer SSI block)
-  const distributingEntity = resolveBookingEntity(t?.distributing_entity?.legal_name ?? "");
-  const isDistValeur = distributingEntity === "Valeur Securities AG, Switzerland";
+  const bookingEntity: string = t?.booking_entity?.legal_name ?? "-";
+  const distributingEntity: string = t?.distributing_entity?.legal_name ?? "-";
+  const distributingEntityType: string = t?.distributing_entity?.entity_type ?? "other";
+  const isDistValeur = distributingEntityType === "valeur";
   const direction: "buy" | "sell" = r.leg === "buy" ? "buy" : "sell";
   const clientPrice: number | undefined =
     direction === "sell" ? (t?.sell_price ?? undefined) : (t?.buy_price ?? undefined);
@@ -105,6 +99,17 @@ export async function GET(
     dealerSSI = (dealerLegData as any)?.counterparty?.ssi ?? undefined;
   }
 
+  // Fetch dealer contacts from group_entity_contacts
+  const { data: entityContactRows } = await supabase
+    .from("group_entity_contacts")
+    .select("email")
+    .eq("group_entity_id", t?.distributing_entity?.id ?? "")
+    .not("email", "is", null);
+  const dealerContacts = (entityContactRows ?? [])
+    .map((c: any) => c.email as string)
+    .filter(Boolean)
+    .join(" | ");
+
   const leg: TradeLeg = {
     id: r.id,
     tradeRef: t?.reference ?? "-",
@@ -123,13 +128,17 @@ export async function GET(
     clientName: t?.client_name ?? "-",
     bookingEntity,
     distributingEntity,
-    dealerLegalName: isDistValeur ? "Valeur Securities AG, Switzerland" : "RiverRock Securities SAS, France",
-    // Valeur: hardcoded Euroclear SSI. RiverRock: opposite-direction leg's counterparty SSI
-    dealerSSI: isDistValeur ? "Euroclear 41420" : dealerSSI,
+    dealerLegalName: t?.distributing_entity?.legal_name ?? "-",
+    // Valeur: SSI from group_entities.ssi (fallback "Euroclear 41420"). RiverRock: opposite-direction leg's counterparty SSI
+    dealerSSI: isDistValeur ? (t?.distributing_entity?.ssi ?? "Euroclear 41420") : dealerSSI,
     counterpartyLegalName: r.counterparty?.legal_name ?? "-",
     counterpartySSI: r.counterparty?.ssi ?? undefined,
     counterpartyId: r.counterparty_id ?? undefined,
     clientId,
+    distributingEntityType,
+    dealerSsi: t?.distributing_entity?.ssi ?? undefined,
+    dealerContacts: dealerContacts || undefined,
+    dealerShortName: t?.distributing_entity?.short_name ?? undefined,
   };
 
   return NextResponse.json(leg);

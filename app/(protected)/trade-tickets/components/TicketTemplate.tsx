@@ -87,7 +87,7 @@ interface Props {
 }
 
 export default function TicketTemplate({ leg, contact, custodianContact, user, containerRef }: Props) {
-  const isValeur = leg.distributingEntity === "Valeur Securities AG, Switzerland";
+  const isValeur = leg.distributingEntityType === "valeur";
   const isClientBuy = leg.direction === "sell"; // dealer sells → CLIENT BUY
 
   const sizeLabel = leg.settlementType === "units" ? "Number of Units" : "Notional";
@@ -103,9 +103,9 @@ export default function TicketTemplate({ leg, contact, custodianContact, user, c
 
   const dealerBlock = {
     legalName: leg.dealerLegalName,
-    ssi: isValeur ? "Euroclear 41420" : (leg.dealerSSI ?? "—"),
+    ssi: leg.dealerSsi ?? (isValeur ? "Euroclear 41420" : (leg.dealerSSI ?? "—")),
     contact: isValeur
-      ? "jacopo.bini@valeur.ch | andrea.coia@valeur.ch"
+      ? (leg.dealerContacts ?? "")
       : `${user.name} \u00B7 ${user.email}`,
   };
   const clientBlock = {
@@ -116,9 +116,7 @@ export default function TicketTemplate({ leg, contact, custodianContact, user, c
   const buyerBlock = isClientBuy ? clientBlock : dealerBlock;
   const sellerBlock = isClientBuy ? dealerBlock : clientBlock;
 
-  const footerText = isValeur
-    ? "This document has been produced by Valeur Securities AG"
-    : "This document has been produced by RiverRock Securities SAS, France";
+  const footerText = `This document has been produced by ${leg.dealerLegalName}`;
 
   const directionBg = isClientBuy ? "#D1FAE5" : "#FEE2E2";
   const directionFg = isClientBuy ? "#065F46" : "#991B1B";
@@ -159,9 +157,8 @@ export default function TicketTemplate({ leg, contact, custodianContact, user, c
               style={{ height: 32, display: "block", filter: "brightness(0) invert(1)" }}
             />
           ) : (
-            <div style={{ fontSize: 16, fontWeight: 700 }}>
-              <span style={{ color: "#fff" }}>RIVERROCK</span>
-              <span style={{ color: "#A8B9D4" }}> SECURITIES SAS</span>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>
+              {leg.dealerShortName ?? leg.dealerLegalName.toUpperCase()}
             </div>
           )}
           <div style={{ color: "#A8B9D4", fontSize: 10, marginTop: 4 }}>Trade Confirmation</div>
