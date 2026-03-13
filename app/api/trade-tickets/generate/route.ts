@@ -39,6 +39,19 @@ function computeNetAmount(leg: Partial<TradeLeg>): number {
   return ((leg.notional ?? 0) * price) / 100;
 }
 
+// ─── Valeur logo helper ───────────────────────────────────────────────────────
+// Reads app/icon.svg, inverts the fill colour to white, and rasterises to PNG
+// via sharp so it can be embedded in DOCX (ImageRun) and PDF (pdfkit .image()).
+
+async function getValeurLogoWhitePng(heightPx: number): Promise<Buffer> {
+  const { readFileSync } = await import("fs");
+  const { join } = await import("path");
+  const sharp = (await import("sharp")).default;
+  const svgPath = join(process.cwd(), "app", "icon.svg");
+  const whiteSvg = readFileSync(svgPath, "utf-8").replace(/#1e3052/gi, "#ffffff");
+  return sharp(Buffer.from(whiteSvg)).resize({ height: heightPx }).png().toBuffer();
+}
+
 // ─── Fetch full leg data from DB ──────────────────────────────────────────────
 
 async function fetchLegData(legId: string): Promise<TradeLeg | null> {
@@ -128,7 +141,7 @@ async function fetchLegData(legId: string): Promise<TradeLeg | null> {
     clientName: t?.client_name ?? "-",
     bookingEntity,
     distributingEntity,
-    dealerLegalName: isDistValeur ? "Valeur Securities AG" : "RiverRock Securities SAS",
+    dealerLegalName: isDistValeur ? "Valeur Securities AG" : "RiverRock Securities SAS, France",
     // Valeur: hardcoded Euroclear SSI. RiverRock: opposite-direction leg's counterparty SSI
     dealerSSI: isDistValeur ? "Euroclear 41420" : dealerSSI,
     counterpartyLegalName: r.counterparty?.legal_name ?? "-",
@@ -184,11 +197,14 @@ async function logTicket(legId: string, contactId: string, format: string, userI
 
 async function generateDocx(leg: TradeLeg, contact: { id: string; name: string; email: string }, user: { name: string; email: string }): Promise<Buffer> {
   const {
-    Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+    Document, Packer, Paragraph, TextRun, ImageRun, Table, TableRow, TableCell,
     AlignmentType, BorderStyle, WidthType, ShadingType, VerticalAlign,
   } = await import("docx");
 
   const isValeur = leg.distributingEntity === "Valeur Securities AG, Switzerland";
+
+  // For Valeur: rasterise the logo SVG to a white-path PNG for embedding
+  const valeurLogoPng = isValeur ? await getValeurLogoWhitePng(60) : null;
   const isClientBuy = leg.direction === "sell"; // dealer sells → CLIENT BUY
 
   // Colours
@@ -332,13 +348,15 @@ async function generateDocx(leg: TradeLeg, contact: { id: string; name: string; 
             borders: noBorders,
             shading: { fill: DARK_NAVY, type: ShadingType.CLEAR },
             verticalAlign: VerticalAlign.CENTER,
-            margins: { top: 120, bottom: 120, left: 200, right: 100 },
+            margins: { top: 150, bottom: 150, left: 200, right: 100 },
             children: [
               new Paragraph({
-                children: [
-                  new TextRun({ text: isValeur ? "VALEUR" : "RIVERROCK", color: WHITE, bold: true, size: 28, font: "Calibri" }),
-                  new TextRun({ text: isValeur ? " SECURITIES AG" : " SECURITIES SAS", color: "A8B9D4", bold: false, size: 28, font: "Calibri" }),
-                ],
+                children: isValeur && valeurLogoPng
+                  ? [new ImageRun({ data: valeurLogoPng, transformation: { width: 46, height: 53 }, type: "png" })]
+                  : [
+                      new TextRun({ text: "RIVERROCK", color: WHITE, bold: true, size: 28, font: "Calibri" }),
+                      new TextRun({ text: " SECURITIES SAS", color: "A8B9D4", bold: false, size: 28, font: "Calibri" }),
+                    ],
               }),
               new Paragraph({
                 children: [new TextRun({ text: "Trade Confirmation", color: "A8B9D4", size: 18, font: "Calibri" })],
@@ -472,6 +490,9 @@ async function generatePdf(leg: TradeLeg, contact: { id: string; name: string; e
   const isValeur = leg.distributingEntity === "Valeur Securities AG, Switzerland";
   const isClientBuy = leg.direction === "sell";
 
+  // For Valeur: rasterise the logo SVG to a white-path PNG for embedding
+  const valeurLogoPng = isValeur ? await getValeurLogoWhitePng(100) : null;
+
   const DARK_NAVY: [number, number, number] = [26, 42, 74];
   const ACCENT_BLUE: [number, number, number] = [46, 95, 163];
   const LIGHT_BLUE: [number, number, number] = [235, 240, 248];
@@ -492,17 +513,22 @@ async function generatePdf(leg: TradeLeg, contact: { id: string; name: string; e
     const COL_W = (PAGE_W - MARGIN * 2) / 2;
     const FULL_W = PAGE_W - MARGIN * 2;
 
-    // Header
-    doc.rect(MARGIN, MARGIN, FULL_W, 60).fill(rgb(DARK_NAVY));
-    doc.fontSize(14).fillColor(WHITE);
-    const brand1 = isValeur ? "VALEUR" : "RIVERROCK";
-    const brand2 = isValeur ? " SECURITIES AG" : " SECURITIES SAS";
-    doc.text(brand1, MARGIN + 10, MARGIN + 10, { continued: true }).fillColor([168, 185, 212]).text(brand2);
-    doc.fontSize(9).fillColor([168, 185, 212]).text("Trade Confirmation", MARGIN + 10, MARGIN + 28);
+    // Header — height 70 (≈17% taller than before) to accommodate logo
+    const HEADER_H = isValeur ? 70 : 60;
+    doc.rect(MARGIN, MARGIN, FULL_W, HEADER_H).fill(rgb(DARK_NAVY));
+    if (isValeur && valeurLogoPng) {
+      // Logo: aspect ratio 1333×1533 ≈ 0.87 width/height → at height 46pt, width ≈ 40pt
+      doc.image(valeurLogoPng, MARGIN + 10, MARGIN + 8, { height: 46 });
+      doc.fontSize(9).fillColor([168, 185, 212]).text("Trade Confirmation", MARGIN + 10, MARGIN + 57);
+    } else {
+      doc.fontSize(14).fillColor(WHITE);
+      doc.text("RIVERROCK", MARGIN + 10, MARGIN + 10, { continued: true }).fillColor([168, 185, 212]).text(" SECURITIES SAS");
+      doc.fontSize(9).fillColor([168, 185, 212]).text("Trade Confirmation", MARGIN + 10, MARGIN + 28);
+    }
     doc.fontSize(11).fillColor(WHITE).text(leg.isin, MARGIN, MARGIN + 10, { width: FULL_W - 10, align: "right" });
     doc.fontSize(9).fillColor([168, 185, 212]).text(leg.productName, MARGIN, MARGIN + 28, { width: FULL_W - 10, align: "right" });
 
-    let y = MARGIN + 75;
+    let y = MARGIN + HEADER_H + 15;
 
     // Client info
     function drawDataRow(label: string, value: string, rowY: number, isAccent = false) {

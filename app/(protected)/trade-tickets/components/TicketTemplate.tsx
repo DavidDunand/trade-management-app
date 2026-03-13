@@ -143,15 +143,26 @@ export default function TicketTemplate({ leg, contact, user, containerRef }: Pro
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          padding: "16px 20px",
+          padding: "19px 20px",
         }}
       >
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>
-            <span style={{ color: "#fff" }}>{isValeur ? "VALEUR" : "RIVERROCK"}</span>
-            <span style={{ color: "#A8B9D4" }}>{isValeur ? " SECURITIES AG" : " SECURITIES SAS"}</span>
-          </div>
-          <div style={{ color: "#A8B9D4", fontSize: 10, marginTop: 2 }}>Trade Confirmation</div>
+          {isValeur ? (
+            /* Logo replaces "VALEUR SECURITIES AG" text for Valeur tickets.
+               brightness(0) invert(1) turns the dark-navy SVG paths white. */
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src="/valeur-logo.svg"
+              alt="Valeur"
+              style={{ height: 32, display: "block", filter: "brightness(0) invert(1)" }}
+            />
+          ) : (
+            <div style={{ fontSize: 16, fontWeight: 700 }}>
+              <span style={{ color: "#fff" }}>RIVERROCK</span>
+              <span style={{ color: "#A8B9D4" }}> SECURITIES SAS</span>
+            </div>
+          )}
+          <div style={{ color: "#A8B9D4", fontSize: 10, marginTop: 4 }}>Trade Confirmation</div>
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ color: "#fff", fontWeight: 700, fontSize: 12 }}>{leg.isin}</div>
