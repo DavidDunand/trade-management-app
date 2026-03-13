@@ -157,9 +157,8 @@ export default function TicketTemplate({ leg, contact, custodianContact, user, c
               style={{ height: 32, display: "block", filter: "brightness(0) invert(1)" }}
             />
           ) : (
-            <div style={{ fontSize: 16, fontWeight: 700 }}>
-              <span style={{ color: "#fff" }}>RIVERROCK</span>
-              <span style={{ color: "#A8B9D4" }}> SECURITIES SAS</span>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>
+              {leg.dealerShortName ?? leg.dealerLegalName.toUpperCase()}
             </div>
           )}
           <div style={{ color: "#A8B9D4", fontSize: 10, marginTop: 4 }}>Trade Confirmation</div>
