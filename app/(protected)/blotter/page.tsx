@@ -1278,8 +1278,9 @@ if (locked) {
     const { error: e1 } = await supabase.from("trade_legs").delete().eq("trade_id", tradeId);
     if (e1) return alert(e1.message);
 
-    const { error: e2 } = await supabase.from("trades").delete().eq("id", tradeId);
+    const { error: e2, count } = await supabase.from("trades").delete({ count: "exact" }).eq("id", tradeId);
     if (e2) return alert(e2.message);
+    if (count === 0) return alert("Could not delete trade — insufficient permissions. Please delete it directly in Supabase.");
 
     showToast("Pending trade removed.");
     setDrawerTrade(null);
