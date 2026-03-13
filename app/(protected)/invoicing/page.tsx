@@ -2,6 +2,23 @@
 export const dynamic = "force-dynamic";
 
 import React, { useEffect, useMemo, useState } from "react";
+
+function PaginationBar({ page, total, pageSize, label, onPage }: { page: number; total: number; pageSize: number; label: string; onPage: (p: number) => void }) {
+  const totalPages = Math.ceil(total / pageSize);
+  if (totalPages <= 1) return null;
+  const from = page * pageSize + 1;
+  const to = Math.min((page + 1) * pageSize, total);
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-t border-black/8 text-sm text-black/50 bg-white rounded-b-xl">
+      <span>Showing {from}–{to} of {total} {label}</span>
+      <div className="flex items-center gap-2">
+        <button onClick={() => onPage(page - 1)} disabled={page === 0} className="px-3 py-1 rounded-lg border border-black/15 disabled:opacity-30 hover:bg-black/5 transition text-black/70">← Prev</button>
+        <span className="text-black/60 font-medium">Page {page + 1} of {totalPages}</span>
+        <button onClick={() => onPage(page + 1)} disabled={page >= totalPages - 1} className="px-3 py-1 rounded-lg border border-black/15 disabled:opacity-30 hover:bg-black/5 transition text-black/70">Next →</button>
+      </div>
+    </div>
+  );
+}
 import { supabase } from "@/src/lib/supabase";
 
 import { CheckCircle, Clock, FileText, X } from "lucide-react";
@@ -460,6 +477,10 @@ export default function InvoicingPage() {
   const [selectedBankId, setSelectedBankId] = useState<string>("");
 
   // Receivables filters
+  const PAGE_SIZE = 50;
+  const [receivablesPage, setReceivablesPage] = useState(0);
+  const [payablesPage, setPayablesPage] = useState(0);
+
   const [recvStatusFilter, setRecvStatusFilter] = useState<"all" | "pending" | "paid">("all");
   const [recvIssuerFilter, setRecvIssuerFilter] = useState<string[]>([]);
   const [recvCcyFilter, setRecvCcyFilter] = useState<string[]>([]);
@@ -673,6 +694,19 @@ export default function InvoicingPage() {
     }
     return { owedByCcy, paidByCcy, owedCount, paidCount };
   }, [filteredPayableRows, retroMap]);
+
+  // Reset pages when filters change
+  useEffect(() => { setReceivablesPage(0); }, [recvStatusFilter, recvIssuerFilter, recvCcyFilter, recvIsinFilter, recvTradeDateFrom, recvTradeDateTo, recvValueDateFrom, recvValueDateTo]);
+  useEffect(() => { setPayablesPage(0); }, [payClientFilter, payIntroducerFilter, payIsinFilter, payTradeStatusFilter, payPaymentStatusFilter, payDateFrom, payDateTo]);
+
+  const pagedReceivables = useMemo(
+    () => filteredReceivables.slice(receivablesPage * PAGE_SIZE, (receivablesPage + 1) * PAGE_SIZE),
+    [filteredReceivables, receivablesPage]
+  );
+  const pagedPayables = useMemo(
+    () => filteredPayableRows.slice(payablesPage * PAGE_SIZE, (payablesPage + 1) * PAGE_SIZE),
+    [filteredPayableRows, payablesPage]
+  );
 
   // ─── Actions ──────────────────────────────────────────────────────────────
 
@@ -891,7 +925,7 @@ export default function InvoicingPage() {
                   {filteredReceivables.length === 0 && (
                     <tr><td colSpan={13} className="text-center py-14 text-black/30 text-sm">No receivables match your filters.</td></tr>
                   )}
-                  {filteredReceivables.map((t, i) => {
+                  {pagedReceivables.map((t, i) => {
                     const inv = invoiceMap.get(t.id);
                     const status = inv?.payment_status ?? "pending";
                     const downloaded = !!inv?.downloaded_at;
@@ -930,6 +964,7 @@ export default function InvoicingPage() {
                   })}
                 </tbody>
               </table>
+              <PaginationBar page={receivablesPage} total={filteredReceivables.length} pageSize={PAGE_SIZE} label="trades" onPage={setReceivablesPage} />
             </div>
           </div>
         </div>
@@ -994,7 +1029,7 @@ export default function InvoicingPage() {
                   {filteredPayableRows.length === 0 && (
                     <tr><td colSpan={9} className="text-center py-14 text-black/30 text-sm">No payables match your filters.</td></tr>
                   )}
-                  {filteredPayableRows.map((r, i) => {
+                  {pagedPayables.map((r, i) => {
                     const status = retroMap.get(r.key)?.payment_status ?? "invoice_not_received";
                     const ccy = r.trade.product?.currency ?? "";
                     const settlement = r.trade.product?.settlement;
@@ -1031,6 +1066,7 @@ export default function InvoicingPage() {
                   })}
                 </tbody>
               </table>
+              <PaginationBar page={payablesPage} total={filteredPayableRows.length} pageSize={PAGE_SIZE} label="rows" onPage={setPayablesPage} />
             </div>
           </div>
         </div>
