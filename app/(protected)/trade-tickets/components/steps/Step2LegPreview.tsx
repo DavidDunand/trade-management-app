@@ -58,7 +58,7 @@ export default function Step2LegPreview({ leg, onBack, onConfirm }: Props) {
             isClientBuy ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700",
           ].join(" ")}
         >
-          {isClientBuy ? "YOU BUY" : "YOU SELL"}
+          {isClientBuy ? "CLIENT BUYS" : "CLIENT SELLS"}
         </div>
 
         <div className="px-4 py-3 space-y-0">
