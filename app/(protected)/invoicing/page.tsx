@@ -877,6 +877,7 @@ export default function InvoicingPage() {
                     <TH>ISIN</TH>
                     <TH>Trade Date</TH>
                     <TH>Value Date</TH>
+                    <TH>Trade Status</TH>
                     <TH>Product</TH>
                     <TH>CCY</TH>
                     <TH right>Size</TH>
@@ -888,7 +889,7 @@ export default function InvoicingPage() {
                 </thead>
                 <tbody>
                   {filteredReceivables.length === 0 && (
-                    <tr><td colSpan={12} className="text-center py-14 text-black/30 text-sm">No receivables match your filters.</td></tr>
+                    <tr><td colSpan={13} className="text-center py-14 text-black/30 text-sm">No receivables match your filters.</td></tr>
                   )}
                   {filteredReceivables.map((t, i) => {
                     const inv = invoiceMap.get(t.id);
@@ -902,6 +903,11 @@ export default function InvoicingPage() {
                         <td className="px-4 py-3 text-[12px] font-mono">{t.product?.isin ?? "—"}</td>
                         <td className="px-4 py-3 text-[12px] whitespace-nowrap">{formatDate(t.trade_date)}</td>
                         <td className="px-4 py-3 text-[12px] whitespace-nowrap">{formatDate(t.value_date)}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex rounded-full text-[11px] font-bold px-2 py-0.5 ${t.status === "booked" ? "bg-emerald-100 text-emerald-700" : t.status === "cancelled" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                            {t.status ?? "—"}
+                          </span>
+                        </td>
                         <td className="px-4 py-3 text-[12px] max-w-[180px] truncate" title={t.product?.product_name ?? ""}>{t.product?.product_name ?? "—"}</td>
                         <td className="px-4 py-3 text-[12px] font-bold">{t.product?.currency ?? "—"}</td>
                         <td className="px-4 py-3 text-[12px] text-right font-mono">{formatNumber(t.total_size)}</td>
