@@ -307,7 +307,7 @@ async function generateDocx(leg: TradeLeg, contact: { id: string; name: string; 
   const netAmountValue = `${leg.currency} ${fmtNumber(leg.netAmount)}`;
 
   // Direction badge text
-  const directionText = isClientBuy ? "CLIENT BUY" : "CLIENT SELL";
+  const directionText = isClientBuy ? "YOU BUY" : "YOU SELL";
 
   // Buyer / Seller blocks
   const dealerBlock = {
@@ -576,7 +576,7 @@ async function generatePdf(leg: TradeLeg, contact: { id: string; name: string; e
     // Direction badge
     const badgeBg: [number, number, number] = isClientBuy ? [209, 250, 229] : [254, 226, 226];
     const badgeFg: [number, number, number] = isClientBuy ? [6, 95, 70] : [153, 27, 27];
-    const dirText = isClientBuy ? "CLIENT BUY" : "CLIENT SELL";
+    const dirText = isClientBuy ? "YOU BUY" : "YOU SELL";
     doc.rect(MARGIN, y, FULL_W, 22).fill(rgb(badgeBg));
     doc.fontSize(10).fillColor(badgeFg).text(dirText, MARGIN, y + 7, { width: FULL_W, align: "center" });
     y += 32;

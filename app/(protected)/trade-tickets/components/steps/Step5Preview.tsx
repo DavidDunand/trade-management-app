@@ -129,7 +129,7 @@ export default function Step5Preview({ leg, contact, custodianContact, user, onB
           <MiniRow label="Net Amount" value={<span className="font-bold text-[#2E5FA3]">{leg.currency} {fmtNum(leg.netAmount)}</span>} />
           <MiniRow label="Direction" value={
             <span className={isClientBuy ? "text-green-700 font-bold" : "text-red-700 font-bold"}>
-              {isClientBuy ? "CLIENT BUY" : "CLIENT SELL"}
+              {isClientBuy ? "YOU BUY" : "YOU SELL"}
             </span>
           } />
           <MiniRow label="Contact" value={`${contact.name} (${contact.email})`} />

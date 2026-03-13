@@ -63,7 +63,7 @@ export default function Step1Search({ onSelectLeg }: Props) {
   }
 
   const legDirectionLabel = (dir: "buy" | "sell") =>
-    dir === "sell" ? "CLIENT BUY" : "CLIENT SELL";
+    dir === "sell" ? "YOU BUY" : "YOU SELL";
   const legDirectionClass = (dir: "buy" | "sell") =>
     dir === "sell"
       ? "bg-green-100 text-green-700"

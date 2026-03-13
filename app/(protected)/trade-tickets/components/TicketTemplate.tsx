@@ -122,7 +122,7 @@ export default function TicketTemplate({ leg, contact, custodianContact, user, c
 
   const directionBg = isClientBuy ? "#D1FAE5" : "#FEE2E2";
   const directionFg = isClientBuy ? "#065F46" : "#991B1B";
-  const directionText = isClientBuy ? "CLIENT BUY" : "CLIENT SELL";
+  const directionText = isClientBuy ? "YOU BUY" : "YOU SELL";
 
   return (
     <div
