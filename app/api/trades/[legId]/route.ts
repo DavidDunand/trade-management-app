@@ -78,6 +78,19 @@ export async function GET(
   const settlementType: "percent" | "units" = p?.settlement ?? "percent";
   const netAmount = computeNetAmount(settlementType, size, clientPrice ?? 0);
 
+  // Resolve clientId: prefer the contact's advisor_id, fall back to advisor lookup by client_name.
+  // Without this, trades with no client_contact_id set would have clientId="" and Step3
+  // would find no contacts even if the advisor has contacts in the DB.
+  let clientId: string = t?.client_contact?.advisor_id ?? "";
+  if (!clientId && t?.client_name) {
+    const { data: advisorRow } = await supabase
+      .from("advisors")
+      .select("id")
+      .eq("legal_name", t.client_name)
+      .maybeSingle();
+    clientId = (advisorRow as any)?.id ?? "";
+  }
+
   // For RiverRock: fetch the opposite-direction leg's counterparty SSI (the actual dealer)
   let dealerSSI: string | undefined = undefined;
   if (!isDistValeur) {
@@ -116,7 +129,7 @@ export async function GET(
     counterpartyLegalName: r.counterparty?.legal_name ?? "-",
     counterpartySSI: r.counterparty?.ssi ?? undefined,
     counterpartyId: r.counterparty_id ?? undefined,
-    clientId: t?.client_contact?.advisor_id ?? "",
+    clientId,
   };
 
   return NextResponse.json(leg);
