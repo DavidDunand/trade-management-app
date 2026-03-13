@@ -28,6 +28,24 @@ function useUrlState(key: string, defaultValue: string) {
   return [value, setValue] as const;
 }
 const MULTI_SEP = "|||";
+const PAGE_SIZE = 50;
+
+function PaginationBar({ page, total, pageSize, onPage }: { page: number; total: number; pageSize: number; onPage: (p: number) => void }) {
+  const totalPages = Math.ceil(total / pageSize);
+  if (totalPages <= 1) return null;
+  const from = page * pageSize + 1;
+  const to = Math.min((page + 1) * pageSize, total);
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-t border-black/8 text-sm text-black/50 bg-white rounded-b-xl">
+      <span>Showing {from}–{to} of {total} trades</span>
+      <div className="flex items-center gap-2">
+        <button onClick={() => onPage(page - 1)} disabled={page === 0} className="px-3 py-1 rounded-lg border border-black/15 disabled:opacity-30 hover:bg-black/5 transition text-black/70">← Prev</button>
+        <span className="text-black/60 font-medium">Page {page + 1} of {totalPages}</span>
+        <button onClick={() => onPage(page + 1)} disabled={page >= totalPages - 1} className="px-3 py-1 rounded-lg border border-black/15 disabled:opacity-30 hover:bg-black/5 transition text-black/70">Next →</button>
+      </div>
+    </div>
+  );
+}
 
 function parseMulti(raw: string) {
   return raw ? raw.split(MULTI_SEP).map(decodeURIComponent).filter(Boolean) : [];
@@ -971,6 +989,7 @@ function setAllSales(values: string[]) {
 
   const [openTrades, setOpenTrades] = useState<Record<string, boolean>>({});
   const [compactLegRows, setCompactLegRows] = useState(true);
+  const [blotterPage, setBlotterPage] = useState(0);
 
   const [drawerTrade, setDrawerTrade] = useState<TradeRow | null>(null);
   const [drawerEffectiveStatus, setDrawerEffectiveStatus] = useState<"pending" | "booked" | "cancelled" | "archived" | null>(null);
@@ -1466,6 +1485,14 @@ if (distribEntityFilter !== "all" && (t.distributing_entity?.legal_name ?? "") !
     return arr;
   }, [filtered]);
 
+  // Reset to page 0 whenever filters change
+  useEffect(() => { setBlotterPage(0); }, [search, statusFilter, timeRange, tradeDateFrom, tradeDateTo, isinFilter, issuerFilter, ccyFilter, clientFilter, introducerFilter, salesFilter, bookingEntityFilter]);
+
+  const pagedGroups = useMemo(
+    () => grouped.slice(blotterPage * PAGE_SIZE, (blotterPage + 1) * PAGE_SIZE),
+    [grouped, blotterPage]
+  );
+
   const toggleTrade = (tradeId: string) => {
     setOpenTrades((prev) => ({ ...prev, [tradeId]: !prev[tradeId] }));
   };
@@ -1837,7 +1864,7 @@ if (distribEntityFilter !== "all" && (t.distributing_entity?.legal_name ?? "") !
             </thead>
 
             <tbody>
-              {grouped.map((g) => {
+              {pagedGroups.map((g) => {
                 const t = g.trade;
                 const isOpen = !!openTrades[g.trade_id];
                 const ccy = t.product?.currency ?? "";
@@ -2033,6 +2060,7 @@ if (distribEntityFilter !== "all" && (t.distributing_entity?.legal_name ?? "") !
               )}
             </tbody>
           </table>
+          <PaginationBar page={blotterPage} total={grouped.length} pageSize={PAGE_SIZE} onPage={setBlotterPage} />
         </div>
 
         {/* Drawer */}
