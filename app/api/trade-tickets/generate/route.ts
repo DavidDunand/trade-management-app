@@ -522,6 +522,7 @@ async function generatePdf(leg: TradeLeg, contact: { id: string; name: string; e
 
   const isValeur = leg.distributingEntityType === "valeur";
   const isClientBuy = leg.direction === "sell";
+  const entityLabel = leg.dealerShortName ?? leg.dealerLegalName.toUpperCase();
 
   // For Valeur: rasterise the logo SVG to a white-path PNG for embedding
   const valeurLogoPng = isValeur ? await getValeurLogoWhitePng(100) : null;
