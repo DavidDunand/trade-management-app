@@ -1,7 +1,8 @@
 /**
  * emailReport.ts
  * Generates and downloads a .eml P&L report from dashboard data.
- * All charts are rendered as inline SVG — no external dependencies required.
+ * Charts are rendered as inline SVG then embedded as base64 <img> tags
+ * for broad email-client compatibility (Outlook, Apple Mail, etc.)
  */
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -17,6 +18,7 @@ export interface PnlRow {
 export interface EmailReportData {
   year: string;
   sales: string;
+  salesEmail?: string;
   pnlRows: PnlRow[];
   pnlFullYear: PnlRow;
   pnlByBookingEntity: { name: string; pnl: number; weight: number }[];
@@ -58,6 +60,7 @@ function ccyColor(ccy: string): string {
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
+/** Abbreviated formatter for legends: €28.5K, €1.23M */
 function fmtEUR(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "—";
   const sign = n < 0 ? "-" : "";
@@ -65,6 +68,17 @@ function fmtEUR(n: number | null | undefined): string {
   if (abs >= 1_000_000) return `${sign}€${(abs / 1_000_000).toFixed(2)}M`;
   if (abs >= 1_000) return `${sign}€${(abs / 1_000).toFixed(1)}K`;
   return `${sign}€${abs.toFixed(0)}`;
+}
+
+/** Full formatter for tables: €28,456 */
+function fmtEURFull(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  const sign = n < 0 ? "-" : "";
+  const abs = Math.abs(n);
+  const str = Math.round(abs)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${sign}€${str}`;
 }
 
 function todayStr(): string {
@@ -83,6 +97,19 @@ function esc(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+// ─── SVG → base64 data URI (email-safe) ──────────────────────────────────────
+// Email clients (Outlook, Apple Mail) don't render inline SVG — embedding as
+// a base64-encoded data URI inside an <img> tag is the standard workaround.
+
+function svgToImgTag(svg: string, width: number, height: number): string {
+  const b64 = btoa(unescape(encodeURIComponent(svg)));
+  return (
+    `<img src="data:image/svg+xml;base64,${b64}" ` +
+    `width="${width}" height="${height}" ` +
+    `style="display:block;max-width:100%;" alt="" />`
+  );
 }
 
 // ─── SVG Donut chart ─────────────────────────────────────────────────────────
@@ -176,8 +203,7 @@ function buildStackedBarsSvg(
   });
 
   return (
-    `<svg width="${svgW}" height="${svgH}" xmlns="http://www.w3.org/2000/svg" ` +
-    `style="display:block;max-width:100%;">` +
+    `<svg width="${svgW}" height="${svgH}" xmlns="http://www.w3.org/2000/svg">` +
     content +
     `</svg>`
   );
@@ -230,16 +256,16 @@ function buildHtml(data: EmailReportData): string {
     "text-align:right;font-variant-numeric:tabular-nums;" +
     "border-top:2px solid #002651;background:#EBF0F8;";
 
-  /* ─── 1. P&L Monthly table ─── */
+  /* ─── 1. P&L Monthly table (full number format) ─── */
   const monthRows = data.pnlRows
     .map((r) => {
       const zero = r.total === 0 && r.rrs === 0 && r.valsec === 0;
       return (
         `<tr>` +
         `<td style="${TD_L}">${esc(r.period)}</td>` +
-        `<td style="${TD_R}">${zero ? "—" : fmtEUR(r.rrs)}</td>` +
-        `<td style="${TD_R}">${zero ? "—" : fmtEUR(r.valsec)}</td>` +
-        `<td style="${TD_TOTAL}">${zero ? "—" : fmtEUR(r.total)}</td>` +
+        `<td style="${TD_R}">${zero ? "—" : fmtEURFull(r.rrs)}</td>` +
+        `<td style="${TD_R}">${zero ? "—" : fmtEURFull(r.valsec)}</td>` +
+        `<td style="${TD_TOTAL}">${zero ? "—" : fmtEURFull(r.total)}</td>` +
         `</tr>`
       );
     })
@@ -249,9 +275,9 @@ function buildHtml(data: EmailReportData): string {
   const fyRow =
     `<tr>` +
     `<td style="${TD_FY_LABEL}">${esc(fy.period)}</td>` +
-    `<td style="${TD_FY_R}">${fmtEUR(fy.rrs)}</td>` +
-    `<td style="${TD_FY_R}">${fmtEUR(fy.valsec)}</td>` +
-    `<td style="${TD_FY_R}">${fmtEUR(fy.total)}</td>` +
+    `<td style="${TD_FY_R}">${fmtEURFull(fy.rrs)}</td>` +
+    `<td style="${TD_FY_R}">${fmtEURFull(fy.valsec)}</td>` +
+    `<td style="${TD_FY_R}">${fmtEURFull(fy.total)}</td>` +
     `</tr>`;
 
   const pnlTable =
@@ -265,13 +291,13 @@ function buildHtml(data: EmailReportData): string {
     `<tbody>${monthRows}${fyRow}</tbody>` +
     `</table>`;
 
-  /* ─── 2. Donut charts ─── */
+  /* ─── 2. Donut charts → base64 <img> for email compatibility ─── */
   const entitySegments = data.pnlByBookingEntity.map((x, i) => ({
     label: x.name,
     value: x.pnl,
     color: ENTITY_COLORS[i % ENTITY_COLORS.length],
   }));
-  const entityDonut = buildDonutSvg(entitySegments, 200);
+  const entityDonutImg = svgToImgTag(buildDonutSvg(entitySegments, 200), 200, 200);
   const entityLegend = legendStrip(
     data.pnlByBookingEntity.map((x, i) => ({
       label: x.name,
@@ -285,7 +311,7 @@ function buildHtml(data: EmailReportData): string {
     value: x.pnl,
     color: TXN_COLORS[x.type] ?? "#405363",
   }));
-  const txnDonut = buildDonutSvg(txnSegments, 200);
+  const txnDonutImg = svgToImgTag(buildDonutSvg(txnSegments, 200), 200, 200);
   const txnLegend = legendStrip(
     data.pnlByTxnType.map((x) => ({
       label: x.type,
@@ -294,14 +320,14 @@ function buildHtml(data: EmailReportData): string {
     }))
   );
 
-  /* ─── 3. Clients P&L table ─── */
+  /* ─── 3. Clients P&L table (full number format) ─── */
   const clientRows = data.clientsAll
     .map((x) => {
       const barW = Math.max(2, Math.round(Math.max(0, x.weight) * 80));
       return (
         `<tr>` +
         `<td style="${TD_L}">${esc(x.name)}</td>` +
-        `<td style="${TD_R}">${fmtEUR(x.pnl)}</td>` +
+        `<td style="${TD_R}">${fmtEURFull(x.pnl)}</td>` +
         `<td style="padding:7px 12px;border-bottom:1px solid #f3f4f6;">` +
         `<span style="font-size:11px;color:#6b7280;margin-right:8px;">${(x.weight * 100).toFixed(1)}%</span>` +
         `<span style="display:inline-block;height:6px;width:${barW}px;background:#002651;opacity:0.4;border-radius:3px;vertical-align:middle;"></span>` +
@@ -321,9 +347,10 @@ function buildHtml(data: EmailReportData): string {
     `<tbody>${clientRows}</tbody>` +
     `</table>`;
 
-  /* ─── 4. Volumes by issuer ─── */
+  /* ─── 4. Volumes by issuer → base64 <img> ─── */
   const { data: volData, currencies } = data.volumesByIssuerCurrency;
-  const volSvg = buildStackedBarsSvg(volData, currencies, 560);
+  const volBarSvg = buildStackedBarsSvg(volData, currencies, 560);
+  const volBarImg = svgToImgTag(volBarSvg, 560, Math.max(60, volData.length * 28 + 6));
   const volLegend = legendStrip(
     currencies.map((ccy) => ({ label: ccy, color: ccyColor(ccy) }))
   );
@@ -386,12 +413,12 @@ function buildHtml(data: EmailReportData): string {
         <tr>
           <td style="width:50%;padding-right:24px;vertical-align:top;">
             <p style="${TITLE}">P&amp;L by Booking Entity</p>
-            <div style="text-align:center;">${entityDonut}</div>
+            <div style="text-align:center;">${entityDonutImg}</div>
             <div style="margin-top:10px;">${entityLegend}</div>
           </td>
           <td style="width:50%;vertical-align:top;">
             <p style="${TITLE}">P&amp;L by Transaction Type</p>
-            <div style="text-align:center;">${txnDonut}</div>
+            <div style="text-align:center;">${txnDonutImg}</div>
             <div style="margin-top:10px;">${txnLegend}</div>
           </td>
         </tr>
@@ -407,7 +434,7 @@ function buildHtml(data: EmailReportData): string {
     <!-- 4. Volumes by Issuer -->
     <div style="${SEC}">
       <p style="${TITLE}">Volumes by Issuer</p>
-      ${volSvg}
+      ${volBarImg}
       <div style="margin-top:10px;">${volLegend}</div>
     </div>
 
@@ -433,6 +460,7 @@ export function downloadEmailReport(data: EmailReportData): void {
   const dateStr = todayStr();
   const salesLabel = data.sales === "All" ? "All Sales" : data.sales;
   const subject = `P&L Report as of ${dateStr} ${salesLabel}`;
+  const fromEmail = data.salesEmail ?? "trading@valeur.ch";
 
   const html = buildHtml(data);
 
@@ -440,7 +468,7 @@ export function downloadEmailReport(data: EmailReportData): void {
     "MIME-Version: 1.0",
     `Date: ${new Date().toUTCString()}`,
     `Subject: ${subject}`,
-    "From: dashboard@valeur.eu",
+    `From: ${fromEmail}`,
     "Content-Type: text/html; charset=UTF-8",
     "",
     html,

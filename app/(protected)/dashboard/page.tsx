@@ -329,6 +329,7 @@ export default function AnalyticsPage() {
 
   const [year, setYear] = useState<string>("");
   const [sales, setSales] = useState<string>("All");
+  const [salesEmail, setSalesEmail] = useState<string>("trading@valeur.ch");
   const [periodMode, setPeriodMode] = useState<"month" | "quarter">("month");
   const [retroCcy, setRetroCcy] = useState<string>("All");
   const chartWrapRef = useRef<HTMLDivElement | null>(null);
@@ -427,6 +428,21 @@ useEffect(() => {
   useEffect(() => {
     if (!year && years.length) setYear(years[0]);
   }, [year, years]);
+
+  useEffect(() => {
+    if (sales === "All") {
+      setSalesEmail("trading@valeur.ch");
+      return;
+    }
+    supabase
+      .from("profiles")
+      .select("email")
+      .eq("full_name", sales)
+      .maybeSingle()
+      .then(({ data }) => {
+        setSalesEmail((data as any)?.email ?? "trading@valeur.ch");
+      });
+  }, [sales]);
 
   const filtered = useMemo(() => {
     const y = Number(year);
@@ -844,6 +860,7 @@ const ccyGradients = useMemo(() => {
     const data: EmailReportData = {
       year,
       sales,
+      salesEmail,
       pnlRows: pnlPeriodTable.monthRows,
       pnlFullYear: pnlPeriodTable.fullYear,
       pnlByBookingEntity,
