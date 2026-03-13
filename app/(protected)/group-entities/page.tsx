@@ -44,6 +44,25 @@ export default function GroupEntitiesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Partial<GroupEntity>>({});
 
+  // add entity
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addDraft, setAddDraft] = useState<{ legal_name: string; ssi: string; short_name: string }>({ legal_name: "", ssi: "", short_name: "" });
+
+  const addEntity = async () => {
+    const payload = {
+      legal_name: addDraft.legal_name.trim(),
+      ssi: addDraft.ssi.trim() || null,
+      short_name: addDraft.short_name.trim() || null,
+      entity_type: "other",
+    };
+    if (!payload.legal_name) return alert("Legal Name is required.");
+    const { error } = await supabase.from("group_entities").insert(payload);
+    if (error) return alert(error.message);
+    setShowAddForm(false);
+    setAddDraft({ legal_name: "", ssi: "", short_name: "" });
+    fetchEntities();
+  };
+
   // contacts drawer
   const [openEntity, setOpenEntity] = useState<GroupEntity | null>(null);
   const [contacts, setContacts] = useState<EntityContact[]>([]);
@@ -201,12 +220,20 @@ export default function GroupEntitiesPage() {
           </h1>
           <div className="text-sm text-black/60">Internal booking and distributing entities</div>
         </div>
-        <button
-          onClick={fetchEntities}
-          className="rounded-xl border border-black/20 px-4 py-2 text-sm font-bold hover:bg-black/5"
-        >
-          {loading ? "…" : "Refresh"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setShowAddForm(true); setAddDraft({ legal_name: "", ssi: "", short_name: "" }); }}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-[#002651] text-white px-4 py-2 text-sm font-bold hover:opacity-95"
+          >
+            <Plus className="h-4 w-4" /> Add Entity
+          </button>
+          <button
+            onClick={fetchEntities}
+            className="rounded-xl border border-black/20 px-4 py-2 text-sm font-bold hover:bg-black/5"
+          >
+            {loading ? "…" : "Refresh"}
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -302,10 +329,45 @@ export default function GroupEntitiesPage() {
                 </tr>
               );
             })}
-            {entities.length === 0 && (
+            {entities.length === 0 && !showAddForm && (
               <tr>
                 <td colSpan={4} className="p-6 text-black/60">
                   {loading ? "Loading…" : "No entities found."}
+                </td>
+              </tr>
+            )}
+            {showAddForm && (
+              <tr className="border-t border-black/10 bg-blue-50/40">
+                <td className="p-3">
+                  <input
+                    autoFocus
+                    value={addDraft.legal_name}
+                    onChange={(e) => setAddDraft((d) => ({ ...d, legal_name: e.target.value }))}
+                    placeholder="Legal Name *"
+                    className="w-full rounded-lg border border-black/20 px-2 py-1 text-sm"
+                  />
+                </td>
+                <td className="p-3">
+                  <input
+                    value={addDraft.short_name}
+                    onChange={(e) => setAddDraft((d) => ({ ...d, short_name: e.target.value }))}
+                    placeholder="e.g. VALEUR PARIS SAS"
+                    className="w-full rounded-lg border border-black/20 px-2 py-1 text-sm"
+                  />
+                </td>
+                <td className="p-3">
+                  <input
+                    value={addDraft.ssi}
+                    onChange={(e) => setAddDraft((d) => ({ ...d, ssi: e.target.value }))}
+                    placeholder="e.g. Euroclear 12345"
+                    className="w-full rounded-lg border border-black/20 px-2 py-1 text-sm"
+                  />
+                </td>
+                <td className="p-3">
+                  <div className="flex justify-end gap-2">
+                    <button onClick={addEntity} className="rounded-lg bg-[#002651] text-white px-3 py-1 text-sm hover:opacity-95">Save</button>
+                    <button onClick={() => setShowAddForm(false)} className="rounded-lg border border-black/20 px-3 py-1 text-sm hover:bg-black/5">Cancel</button>
+                  </div>
                 </td>
               </tr>
             )}
