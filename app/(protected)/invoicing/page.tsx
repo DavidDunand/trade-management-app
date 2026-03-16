@@ -115,7 +115,7 @@ type PendingInvoice = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const BOOKING_ENTITY = "RiverRock Securities SAS, France";
+// BOOKING_ENTITY removed — fetched dynamically from group_entities by entity_type
 
 const RETRO_STATUS_OPTIONS: {
   value: RetroStatus;
@@ -182,7 +182,8 @@ function generateInvoicePdf(
   senderBilling: BillingRecord | null,
   bankAccount: BankAccountRecord | null,
   dealerBilling: BillingRecord | null,
-  dealerName: string
+  dealerName: string,
+  senderEntityName: string
 ) {
   const isin = trade.product?.isin ?? "—";
   const productName = trade.product?.product_name ?? "—";
@@ -194,7 +195,7 @@ function generateInvoicePdf(
   const today = formatDate(new Date().toISOString().slice(0, 10));
   const invoiceNumber = `INV-${ref}-${new Date().getFullYear()}`;
 
-  const senderName = senderBilling?.billing_entity ?? BOOKING_ENTITY;
+  const senderName = senderBilling?.billing_entity ?? senderEntityName;
   const senderAddress = senderBilling?.postal_address ?? "[Address — to be completed]";
   const senderVat = senderBilling?.vat_number ? `VAT: ${senderBilling.vat_number}` : "";
 
@@ -308,7 +309,7 @@ function generateInvoicePdf(
     </div>
   </div>
   <div class="footer">
-    RiverRock Securities SAS est dument habilitée à exercer en France une activité d'Entreprise d'Investissement par la Banque de France (www.banque-france.fr), via l'Autorité de Contrôle Prudentiel et de Résolution (www.acpr.banque-france.fr).
+    ${he(senderName)} est dument habilitée à exercer en France une activité d'Entreprise d'Investissement par la Banque de France (www.banque-france.fr), via l'Autorité de Contrôle Prudentiel et de Résolution (www.acpr.banque-france.fr).
   </div>
 </body>
 </html>`;
@@ -471,6 +472,8 @@ export default function InvoicingPage() {
   // Internal (RiverRock) billing + bank accounts, loaded at page init
   const [senderBilling, setSenderBilling] = useState<BillingRecord | null>(null);
   const [senderBankAccounts, setSenderBankAccounts] = useState<BankAccountRecord[]>([]);
+  // Entity name for receivables filter — fetched by entity_type so rename-safe
+  const [riverrockEntityName, setRiverrockEntityName] = useState<string>("");
 
   // Bank account selection modal (shown when multiple accounts match trade currency)
   const [pendingInvoice, setPendingInvoice] = useState<PendingInvoice | null>(null);
@@ -538,11 +541,13 @@ export default function InvoicingPage() {
         { data: retroData },
         { data: legData },
         { data: internalCpData },
+        { data: rrEntityData },
       ] = await Promise.all([
         supabase.from("invoices").select("id, trade_id, downloaded_at, payment_status, created_at").in("trade_id", tradeIds),
         supabase.from("retro_payments").select("id, trade_id, recipient_type, payment_status, created_at").in("trade_id", tradeIds),
         supabase.from("trade_legs").select("trade_id, counterparty:counterparty_id(legal_name, cp_type)").in("trade_id", tradeIds),
-        supabase.from("counterparties").select("id").eq("cp_type", "internal").ilike("legal_name", "%RiverRock%").maybeSingle(),
+        supabase.from("counterparties").select("id").eq("cp_type", "internal").maybeSingle(),
+        supabase.from("group_entities").select("legal_name").eq("entity_type", "riverrock").maybeSingle(),
       ]);
 
       // Invoice map
@@ -564,6 +569,10 @@ export default function InvoicingPage() {
         }
       }
       setDealerMap(dmap);
+
+      // Set the RiverRock entity name for receivables filter (rename-safe)
+      const rrEntity = rrEntityData as { legal_name: string } | null;
+      if (rrEntity?.legal_name) setRiverrockEntityName(rrEntity.legal_name);
 
       // Sender (internal) billing + bank accounts
       const internalCp = internalCpData as { id: string } | null;
@@ -591,8 +600,8 @@ export default function InvoicingPage() {
   // ─── Derived data ──────────────────────────────────────────────────────────
 
   const receivableTrades = useMemo(
-    () => trades.filter((t) => t.booking_entity?.legal_name === BOOKING_ENTITY && Number(t.gross_fees ?? 0) > 0),
-    [trades]
+    () => trades.filter((t) => riverrockEntityName && t.booking_entity?.legal_name === riverrockEntityName && Number(t.gross_fees ?? 0) > 0),
+    [trades, riverrockEntityName]
   );
 
   const payableTrades = useMemo(
@@ -725,7 +734,7 @@ export default function InvoicingPage() {
     dealerBilling: BillingRecord | null,
     dealerName: string
   ) {
-    generateInvoicePdf(trade, senderBilling, bankAccount, dealerBilling, dealerName);
+    generateInvoicePdf(trade, senderBilling, bankAccount, dealerBilling, dealerName, riverrockEntityName);
 
     // Track download
     const existing = invoiceMap.get(trade.id);
