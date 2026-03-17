@@ -573,7 +573,8 @@ export default function InvoicingPage() {
         if (cp?.cp_type === "issuer_dealer" && !dmap.has(leg.trade_id)) {
           dmap.set(leg.trade_id, cp.legal_name);
         }
-        if (cp?.cp_type === "custodian" && !cmap.has(leg.trade_id)) {
+        // Custodian = non-dealer, non-internal leg (cp_type may vary, e.g. "other")
+        if (cp?.cp_type !== "issuer_dealer" && cp?.cp_type !== "internal" && !cmap.has(leg.trade_id)) {
           cmap.set(leg.trade_id, cp.legal_name);
         }
       }
