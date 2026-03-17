@@ -40,6 +40,8 @@ type TradeRow = {
   retro_introducer: number | null;
   retro_client_input: number | null;
   retro_introducer_input: number | null;
+  fee_custodian: number | null;
+  fee_custodian_input: number | null;
   client_name: string | null;
   introducer_name: string | null;
   booking_entity: { legal_name: string } | null;
@@ -69,16 +71,16 @@ type RetroStatus =
 type RetroPaymentRecord = {
   id: string;
   trade_id: string;
-  recipient_type: "client" | "introducer";
+  recipient_type: "client" | "introducer" | "custodian";
   payment_status: RetroStatus;
   created_at: string;
 };
 
-// One expanded row per recipient (client OR introducer)
+// One expanded row per recipient (client, introducer, or custodian)
 type PayableRow = {
   key: string;
   trade: TradeRow;
-  recipientType: "client" | "introducer";
+  recipientType: "client" | "introducer" | "custodian";
   recipientName: string | null;
   retroPct: number | null;
   retroAmt: number | null;
@@ -434,7 +436,7 @@ function exportPayablesToCsv(rows: PayableRow[], retroMap: Map<string, RetroPaym
         r.trade.product?.isin ?? "",
         formatDate(r.trade.trade_date),
         r.recipientName ?? "",
-        r.recipientType === "client" ? "Client" : "Introducer",
+        r.recipientType === "client" ? "Client" : r.recipientType === "introducer" ? "Introducer" : "Custodian",
         ccy,
         r.trade.total_size ?? "",
         retroPctStr,
@@ -468,6 +470,7 @@ export default function InvoicingPage() {
 
   // Dealer name per trade_id (from trade_legs join)
   const [dealerMap, setDealerMap] = useState<Map<string, string>>(new Map());
+  const [custodianMap, setCustodianMap] = useState<Map<string, string>>(new Map());
 
   // Internal (RiverRock) billing + bank accounts, loaded at page init
   const [senderBilling, setSenderBilling] = useState<BillingRecord | null>(null);
@@ -519,6 +522,7 @@ export default function InvoicingPage() {
           total_size, gross_fees, pnl_trade_ccy,
           retro_client, retro_introducer,
           retro_client_input, retro_introducer_input,
+          fee_custodian, fee_custodian_input,
           client_name, introducer_name,
           booking_entity:booking_entity_id(legal_name),
           product:product_id(
@@ -561,14 +565,21 @@ export default function InvoicingPage() {
       setRetroMap(rmap);
 
       // Dealer map: trade_id → dealer legal_name (first dealer leg found per trade)
+      // Custodian map: trade_id → custodian legal_name (first custodian leg found per trade)
       const dmap = new Map<string, string>();
+      const cmap = new Map<string, string>();
       for (const leg of legData ?? []) {
         const cp = Array.isArray((leg as any).counterparty) ? (leg as any).counterparty[0] : (leg as any).counterparty;
         if (cp?.cp_type === "issuer_dealer" && !dmap.has(leg.trade_id)) {
           dmap.set(leg.trade_id, cp.legal_name);
         }
+        // Custodian = non-dealer, non-internal leg (cp_type may vary, e.g. "other")
+        if (cp?.cp_type !== "issuer_dealer" && cp?.cp_type !== "internal" && !cmap.has(leg.trade_id)) {
+          cmap.set(leg.trade_id, cp.legal_name);
+        }
       }
       setDealerMap(dmap);
+      setCustodianMap(cmap);
 
       // Set the RiverRock entity name for receivables filter (rename-safe)
       const rrEntity = rrEntityData as { legal_name: string } | null;
@@ -605,7 +616,11 @@ export default function InvoicingPage() {
   );
 
   const payableTrades = useMemo(
-    () => trades.filter((t) => Number(t.retro_client ?? 0) > 0 || Number(t.retro_introducer ?? 0) > 0),
+    () => trades.filter((t) =>
+      Number(t.retro_client ?? 0) > 0 ||
+      Number(t.retro_introducer ?? 0) > 0 ||
+      Number(t.fee_custodian ?? 0) > 0
+    ),
     [trades]
   );
 
@@ -614,9 +629,10 @@ export default function InvoicingPage() {
     for (const t of payableTrades) {
       if (Number(t.retro_client ?? 0) > 0) rows.push({ key: `${t.id}:client`, trade: t, recipientType: "client", recipientName: t.client_name, retroPct: t.retro_client_input, retroAmt: t.retro_client });
       if (Number(t.retro_introducer ?? 0) > 0) rows.push({ key: `${t.id}:introducer`, trade: t, recipientType: "introducer", recipientName: t.introducer_name, retroPct: t.retro_introducer_input, retroAmt: t.retro_introducer });
+      if (Number(t.fee_custodian ?? 0) > 0) rows.push({ key: `${t.id}:custodian`, trade: t, recipientType: "custodian", recipientName: custodianMap.get(t.id) ?? null, retroPct: t.fee_custodian_input, retroAmt: t.fee_custodian });
     }
     return rows;
-  }, [payableTrades]);
+  }, [payableTrades, custodianMap]);
 
   // Filter option lists
   const recvIssuerOptions = useMemo(
@@ -659,7 +675,8 @@ export default function InvoicingPage() {
       if (clientActive || introducerActive) {
         const matchesClient = clientActive && r.recipientType === "client" && payClientFilter.includes(r.recipientName ?? "");
         const matchesIntroducer = introducerActive && r.recipientType === "introducer" && payIntroducerFilter.includes(r.recipientName ?? "");
-        if (!matchesClient && !matchesIntroducer) return false;
+        const isCustodian = r.recipientType === "custodian"; // custodian rows always shown regardless of client/introducer filter
+        if (!matchesClient && !matchesIntroducer && !isCustodian) return false;
       }
       if (payIsinFilter && !(r.trade.product?.isin ?? "").toLowerCase().includes(payIsinFilter.toLowerCase())) return false;
       if (payTradeStatusFilter !== "all" && (r.trade.status ?? "") !== payTradeStatusFilter) return false;
@@ -1049,8 +1066,8 @@ export default function InvoicingPage() {
                         <td className="px-4 py-3 text-[12px] whitespace-nowrap">{formatDate(r.trade.trade_date)}</td>
                         <td className="px-4 py-3 text-[12px] font-bold">{r.recipientName ?? "—"}</td>
                         <td className="px-4 py-3">
-                          <span className={`inline-flex rounded-full text-[11px] font-bold px-2 py-0.5 ${r.recipientType === "client" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>
-                            {r.recipientType === "client" ? "Client" : "Introducer"}
+                          <span className={`inline-flex rounded-full text-[11px] font-bold px-2 py-0.5 ${r.recipientType === "client" ? "bg-blue-100 text-blue-700" : r.recipientType === "introducer" ? "bg-purple-100 text-purple-700" : "bg-orange-100 text-orange-700"}`}>
+                            {r.recipientType === "client" ? "Client" : r.recipientType === "introducer" ? "Introducer" : "Custodian"}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-[12px] text-right font-mono">{formatNumber(r.trade.total_size)}</td>
