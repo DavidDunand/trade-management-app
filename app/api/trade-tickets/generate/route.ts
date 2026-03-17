@@ -460,6 +460,7 @@ async function generateDocx(leg: TradeLeg, contact: { id: string; name: string; 
     columnWidths: [CONTENT_W / 2, CONTENT_W / 2],
     rows: [
       headerBar("Trade Economics"),
+      dataRow("ISIN", leg.isin),
       dataRow("Trade Date", fmtDate(leg.tradeDate)),
       dataRow("Value / Settlement Date", fmtDate(leg.valueDate)),
       dataRow("Currency", leg.currency),
@@ -607,6 +608,7 @@ async function generatePdf(leg: TradeLeg, contact: { id: string; name: string; e
       : `${fmtNumber(leg.clientPrice)}%`;
 
     drawSectionBar("Trade Economics", y); y += 24;
+    drawDataRow("ISIN", leg.isin, y); y += 22;
     drawDataRow("Trade Date", fmtDate(leg.tradeDate), y); y += 22;
     drawDataRow("Value / Settlement Date", fmtDate(leg.valueDate), y); y += 22;
     drawDataRow("Currency", leg.currency, y); y += 22;

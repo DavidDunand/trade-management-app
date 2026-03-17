@@ -194,6 +194,7 @@ export default function TicketTemplate({ leg, contact, custodianContact, user, c
       {/* Trade economics */}
       <div style={{ borderTop: "2px solid #E5E7EB" }}>
         <SectionBar>Trade Economics</SectionBar>
+        <DataRow label="ISIN" value={leg.isin} />
         <DataRow label="Trade Date" value={fmtDate(leg.tradeDate)} />
         <DataRow label="Value / Settlement Date" value={fmtDate(leg.valueDate)} />
         <DataRow label="Currency" value={leg.currency} />
