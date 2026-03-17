@@ -713,8 +713,7 @@ export default function InvoicingPage() {
     let owedCount = 0, paidCount = 0;
     for (const r of filteredPayableRows) {
       const status = retroMap.get(r.key)?.payment_status ?? "invoice_not_received";
-      // custodian fee is always stored in EUR; client/introducer retros use product currency
-      const ccy = r.recipientType === "custodian" ? "EUR" : (r.trade.product?.currency ?? "?");
+      const ccy = r.trade.product?.currency ?? "?";
       const amt = Number(r.retroAmt ?? 0);
       if (status === "payment_approved") { paidByCcy.set(ccy, (paidByCcy.get(ccy) ?? 0) + amt); paidCount++; }
       else { owedByCcy.set(ccy, (owedByCcy.get(ccy) ?? 0) + amt); owedCount++; }
