@@ -15,7 +15,7 @@ export async function PATCH(req: NextRequest) {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  let body: { reportId?: string; status?: string };
+  let body: { tradeId?: string; status?: string };
   try {
     body = await req.json();
   } catch {
