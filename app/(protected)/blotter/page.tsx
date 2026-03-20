@@ -746,7 +746,7 @@ function IsinTagInput({ values, onChange }: { values: string[]; onChange: (v: st
 
   return (
     <div
-      className="flex flex-wrap gap-1.5 items-center min-h-[38px] rounded-xl border border-black/20 px-3 py-1.5 cursor-text bg-white"
+      className="flex flex-wrap gap-1.5 items-center rounded-xl border border-black/20 px-3 py-2 cursor-text bg-white"
       onClick={() => inputRef.current?.focus()}
     >
       {values.map((v) => (
