@@ -449,16 +449,22 @@ export default function TransactionReportingPage() {
                         <td className="px-3 py-2.5">{t.product?.product_name ?? "-"}</td>
                         <td className="px-3 py-2.5 text-right font-bold tabular-nums">{fmtSize(t.total_size)}</td>
                         <td className="px-3 py-2.5 text-center">
-                          <span
-                            className={`inline-flex items-center justify-center min-w-[120px] px-2 py-1 text-xs border rounded-full font-bold ${
-                              status === "Generated" ? "bg-green-50 border-green-200 text-green-700"
-                              : status === "Validation issues" ? "bg-red-50 border-red-200 text-red-700"
-                              : "bg-amber-50 border-amber-200 text-amber-700"
-                            }`}
-                            title={hasIssues ? issues.join(", ") : undefined}
-                          >
-                            {status}
-                          </span>
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span
+                              className={`inline-flex items-center justify-center min-w-[120px] px-2 py-1 text-xs border rounded-full font-bold ${
+                                status === "Generated" ? "bg-green-50 border-green-200 text-green-700"
+                                : status === "Validation issues" ? "bg-red-50 border-red-200 text-red-700"
+                                : "bg-amber-50 border-amber-200 text-amber-700"
+                              }`}
+                            >
+                              {status}
+                            </span>
+                            {hasIssues && (
+                              <span className="text-[10px] text-red-500 leading-tight">
+                                {issues.map((i) => i.replace("Missing ", "")).join(" · ")}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-2.5 text-xs text-black/60 text-center">
                           {rep?.created_at ? new Date(rep.created_at).toLocaleString() : "-"}
