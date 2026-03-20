@@ -715,6 +715,62 @@ function buildEmlForTrade(args: { trade: TradeRow; legs: LegRow[] }) {
   return { eml, filename };
 }
 
+function IsinTagInput({ values, onChange }: { values: string[]; onChange: (v: string[]) => void }) {
+  const [input, setInput] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function addTag(raw: string) {
+    const trimmed = raw.trim().toUpperCase();
+    if (trimmed && !values.includes(trimmed)) {
+      onChange([...values, trimmed]);
+    }
+    setInput("");
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addTag(input);
+    } else if (e.key === "Backspace" && !input && values.length > 0) {
+      onChange(values.slice(0, -1));
+    }
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    const pasted = e.clipboardData.getData("text").trim();
+    if (pasted.length >= 10) {
+      e.preventDefault();
+      addTag(pasted);
+    }
+  }
+
+  return (
+    <div
+      className="flex flex-wrap gap-1.5 items-center min-h-[38px] rounded-xl border border-black/20 px-3 py-1.5 cursor-text bg-white"
+      onClick={() => inputRef.current?.focus()}
+    >
+      {values.map((v) => (
+        <span key={v} className="inline-flex items-center gap-1 bg-[#2E5FA3]/10 text-[#2E5FA3] text-xs font-bold px-2 py-0.5 rounded-lg whitespace-nowrap">
+          {v}
+          <button
+            onClick={(e) => { e.stopPropagation(); onChange(values.filter((x) => x !== v)); }}
+            className="hover:text-red-500 transition leading-none"
+          >×</button>
+        </span>
+      ))}
+      <input
+        ref={inputRef}
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
+        placeholder={values.length === 0 ? "ISIN" : ""}
+        className="flex-1 min-w-[80px] outline-none text-sm font-bold bg-transparent placeholder:font-normal placeholder:text-black/40"
+      />
+    </div>
+  );
+}
+
 function MultiSelect({
   label,
   options,
@@ -925,7 +981,8 @@ function presetClass(active: boolean) {
   const bookingEntityFilter = bookingEntityFilterRaw;
   const [distribEntityFilterRaw, setDistribEntityFilterRaw] = useUrlState("distrib", "all");
   const distribEntityFilter = distribEntityFilterRaw;
-  const [isinFilter, setIsinFilter] = useUrlState("isin", "");
+  const [isinFilterRaw, setIsinFilterRaw] = useUrlState("isin", "");
+  const isinFilter = parseMulti(isinFilterRaw);
   const [issuerFilterRaw, setIssuerFilterRaw] = useUrlState("issuer", "");
 
 const issuerFilter = parseMulti(issuerFilterRaw)
@@ -1382,7 +1439,6 @@ if (locked) {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const isinQ = isinFilter.trim().toLowerCase();
 
     const startIso = startDateForRange(timeRange);
 
@@ -1399,7 +1455,7 @@ if (locked) {
 if (tradeDateFrom && tradeDate < tradeDateFrom) return false;
 if (tradeDateTo && tradeDate > tradeDateTo) return false;
 
-      if (isinQ && !(t.product?.isin ?? "").toLowerCase().includes(isinQ)) return false;
+      if (isinFilter.length && !isinFilter.some((q) => (t.product?.isin ?? "").toUpperCase().includes(q.toUpperCase()))) return false;
       if (
 
   issuerFilter.length &&
@@ -1453,7 +1509,7 @@ if (distribEntityFilter !== "all" && (t.distributing_entity?.legal_name ?? "") !
 
       return hay.includes(q);
     });
-  }, [rows, search, statusFilter, timeRange, tradeDateFrom, tradeDateTo, isinFilter, issuerFilter, ccyFilter, clientFilter, introducerFilter, salesFilter, bookingEntityFilter]);
+  }, [rows, search, statusFilter, timeRange, tradeDateFrom, tradeDateTo, isinFilterRaw, issuerFilter, ccyFilter, clientFilter, introducerFilter, salesFilter, bookingEntityFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const grouped: TradeGroup[] = useMemo(() => {
     const map = new Map<string, TradeGroup>();
@@ -1490,7 +1546,7 @@ if (distribEntityFilter !== "all" && (t.distributing_entity?.legal_name ?? "") !
   // as useEffect deps — React compares by reference and would fire on every render.
   // Strings compare by value, so this only triggers when filters actually change.
   const blotterFilterKey = [
-    search, statusFilter, timeRange, tradeDateFrom, tradeDateTo, isinFilter,
+    search, statusFilter, timeRange, tradeDateFrom, tradeDateTo, isinFilterRaw,
     issuerFilterRaw, ccyFilterRaw, clientFilterRaw, introducerFilterRaw, salesFilterRaw, bookingEntityFilterRaw,
   ].join("|");
   useEffect(() => { setBlotterPage(0); }, [blotterFilterKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1505,7 +1561,7 @@ if (distribEntityFilter !== "all" && (t.distributing_entity?.legal_name ?? "") !
   };
 
   const hasActiveFilters = !!(
-    isinFilter || issuerFilter.length || ccyFilter.length ||
+    isinFilter.length || issuerFilter.length || ccyFilter.length ||
     clientFilter.length || introducerFilter.length || salesFilter.length ||
     statusFilter !== "all" || bookingEntityFilter !== "all" || distribEntityFilter !== "all" ||
     tradeDateFrom || tradeDateTo
@@ -1522,7 +1578,7 @@ if (distribEntityFilter !== "all" && (t.distributing_entity?.legal_name ?? "") !
   if (statusFilter !== "all") activeFilterChips.push({ label: `Status: ${statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}`, onRemove: () => setStatusFilterRaw("all") });
   if (bookingEntityFilter !== "all") activeFilterChips.push({ label: `Booking Entity: ${bookingEntityFilter.includes("RiverRock") ? "RiverRock" : "Valeur Securities"}`, onRemove: () => setBookingEntityFilterRaw("all") });
   if (distribEntityFilter !== "all") activeFilterChips.push({ label: `Distribution Entity: ${distribEntityFilter.includes("RiverRock") ? "RiverRock" : "Valeur Securities"}`, onRemove: () => setDistribEntityFilterRaw("all") });
-  if (isinFilter) activeFilterChips.push({ label: `ISIN: ${isinFilter}`, onRemove: () => setIsinFilter("") });
+  for (const v of isinFilter) activeFilterChips.push({ label: `ISIN: ${v}`, onRemove: () => setIsinFilterRaw(stringifyMulti(isinFilter.filter((x) => x !== v))) });
   for (const v of issuerFilter) activeFilterChips.push({ label: `Issuer: ${v}`, onRemove: () => setIssuerFilterRaw(stringifyMulti(issuerFilter.filter((x) => x !== v))) });
   for (const v of ccyFilter) activeFilterChips.push({ label: `CCY: ${v}`, onRemove: () => setCcyFilterRaw(stringifyMulti(ccyFilter.filter((x) => x !== v))) });
   for (const v of clientFilter) activeFilterChips.push({ label: `Client: ${v}`, onRemove: () => setClientFilterRaw(stringifyMulti(clientFilter.filter((x) => x !== v))) });
@@ -1652,11 +1708,9 @@ if (distribEntityFilter !== "all" && (t.distributing_entity?.legal_name ?? "") !
   {/* ROW 1 — COLUMN FILTERS */}
   <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
 
-    <input
-      value={isinFilter}
-      onChange={(e) => setIsinFilter(e.target.value)}
-      placeholder="ISIN"
-      className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold"
+    <IsinTagInput
+      values={isinFilter}
+      onChange={(v) => setIsinFilterRaw(stringifyMulti(v))}
     />
 
 <MultiSelect
