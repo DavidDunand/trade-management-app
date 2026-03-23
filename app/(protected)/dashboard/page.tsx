@@ -332,6 +332,7 @@ export default function AnalyticsPage() {
   const [salesEmail, setSalesEmail] = useState<string>("trading@valeur.ch");
   const [periodMode, setPeriodMode] = useState<"month" | "quarter">("month");
   const [retroCcy, setRetroCcy] = useState<string>("All");
+  const [volumesTab, setVolumesTab] = useState<"issuer" | "client">("issuer");
   const chartWrapRef = useRef<HTMLDivElement | null>(null);
   const [chartH, setChartH] = useState<number>(320);
 
@@ -820,6 +821,48 @@ if (Number.isFinite(size) && Number.isFinite(clientPrice)) {
     return { data: sorted, currencies };
   }, [included]);
 
+  // --- Volumes by client, stacked by currency (HORIZONTAL) ---
+  const volumesByClientCurrency = useMemo(() => {
+    const clients = Array.from(new Set(included.map((r) => (r.client_name ?? "N/A").trim() || "N/A"))).sort();
+    const currencies = Array.from(new Set(included.map((r) => (r.product_currency ?? "N/A").trim() || "N/A"))).sort();
+
+    const base = clients.map((cl) => {
+      const obj: any = { client: clampLabel(cl, 24), _clientRaw: cl, _total: 0 };
+      currencies.forEach((c) => (obj[c] = 0));
+      return obj;
+    });
+
+    const idx = new Map<string, number>();
+    clients.forEach((cl, i) => idx.set(cl, i));
+
+    included.forEach((r) => {
+      const cl = (r.client_name ?? "N/A").trim() || "N/A";
+      const ccy = (r.product_currency ?? "N/A").trim() || "N/A";
+      const i = idx.get(cl);
+      if (i === undefined) return;
+
+      const size = Number(r.total_size ?? 0);
+      const clientPrice = Number(r.sell_price ?? 0);
+      let vol = 0;
+
+      if (Number.isFinite(size) && Number.isFinite(clientPrice)) {
+        const settlement = (r.settlement ?? "").toLowerCase();
+        if (settlement === "percent") {
+          const scale = clientPrice <= 2 ? 1 : 0.01;
+          vol = size * clientPrice * scale;
+        } else {
+          vol = size * clientPrice;
+        }
+      }
+
+      base[i][ccy] += vol;
+      base[i]._total += vol;
+    });
+
+    const sorted = [...base].sort((a, b) => Math.abs(b._total) - Math.abs(a._total));
+    return { data: sorted, currencies };
+  }, [included]);
+
   // --- Gradients ---
   const entityGradients = useMemo(() => {
     return monthlyByEntity.entities.map((e, i) => ({
@@ -857,6 +900,20 @@ const ccyGradients = useMemo(() => {
     color: colorMap[ccy.toUpperCase()] ?? "#a855f7", // purple fallback
   }));
 }, [volumesByIssuerCurrency.currencies]);
+
+const ccyGradientsClient = useMemo(() => {
+  const colorMap: Record<string, string> = {
+    CHF: "#1f3a8a",
+    EUR: "#005F9B",
+    USD: "#9ca3af",
+  };
+
+  return volumesByClientCurrency.currencies.map((ccy) => ({
+    ccy,
+    id: `grad_ccy_client_${ccy}`,
+    color: colorMap[ccy.toUpperCase()] ?? "#a855f7",
+  }));
+}, [volumesByClientCurrency.currencies]);
 
   const handleEmailReport = async () => {
     const data: EmailReportData = {
@@ -1395,74 +1452,143 @@ const ccyGradients = useMemo(() => {
 
         {/* Row 5 */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          {/* Volumes by issuer — HORIZONTAL + GRADIENT + correct formula */}
+          {/* Volumes — tabbed: By Issuer / By Client */}
           <GlassCard>
-            <SectionTitle title="Volumes by Issuer" sub="Stacked by currency • Volume = Size × Client Price" />
-            <div
-  className="mt-4"
-  style={{
-    height: Math.max(520, volumesByIssuerCurrency.data.length * 34 + 80), // 34px per issuer row
-  }}
->
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={volumesByIssuerCurrency.data}
-                  layout="vertical"
-                  margin={{ left: 18, right: 12, top: 8, bottom: 8 }}
-                  barCategoryGap={14}
-                >
-<defs>
-  {ccyGradients.map((g) => (
-    <linearGradient key={g.id} id={g.id} x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stopColor={g.color} stopOpacity={0.95} />
-      <stop offset="100%" stopColor={g.color} stopOpacity={0.35} />
-    </linearGradient>
-  ))}
-</defs>
+            <SectionTitle
+              title="Volumes"
+              sub="Stacked by currency • Volume = Size × Client Price"
+              right={
+                <div className="inline-flex rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60 bg-white/60 dark:bg-zinc-950/30 p-1">
+                  {(["issuer", "client"] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setVolumesTab(tab)}
+                      className={[
+                        "px-3 py-1.5 rounded-xl text-sm font-semibold",
+                        volumesTab === tab
+                          ? "bg-[hsl(var(--primary)/0.15)] text-zinc-900 dark:text-zinc-50"
+                          : "text-zinc-600 dark:text-zinc-300",
+                      ].join(" ")}
+                    >
+                      {tab === "issuer" ? "By Issuer" : "By Client"}
+                    </button>
+                  ))}
+                </div>
+              }
+            />
 
-                  <CartesianGrid strokeDasharray="3 7" stroke="rgba(120,120,120,0.18)" />
-                  <XAxis
-  type="number"
-  tickLine={false}
-  axisLine={false}
-  tick={{ fontSize: 11 }}
-  tickFormatter={(v) => {
-    const m = Number(v) / 1_000_000;
-    return m >= 1 ? `${m.toFixed(1)}m` : `${(Number(v) / 1000).toFixed(0)}k`;
-  }}
-/>
-                  <YAxis
-  type="category"
-  dataKey="issuer"
-  tickLine={false}
-  axisLine={false}
-  width={220}
-  tick={{ fontSize: 11 }}
-  interval={0}
-/>
-                  <Tooltip
-                    formatter={(v: any) => formatInt(Number(v))}
-                    contentStyle={{
-                      borderRadius: 16,
-                      border: "1px solid rgba(120,120,120,0.25)",
-                      background: "rgba(255,255,255,0.85)",
-                    }}
-                  />
-                  <Legend iconType="circle" formatter={(value) => <span className="text-xs text-zinc-600">{String(value)}</span>} />
-
-{volumesByIssuerCurrency.currencies.map((ccy) => (
-  <Bar
-    key={ccy}
-    dataKey={ccy}
-    stackId="v"
-    fill={`url(#grad_ccy_${ccy})`}
-    radius={[12, 12, 12, 12]}
-    barSize={22}
-  />
-))}
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            {volumesTab === "issuer" ? (
+              <div
+                className="mt-4"
+                style={{ height: Math.max(520, volumesByIssuerCurrency.data.length * 34 + 80) }}
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={volumesByIssuerCurrency.data}
+                    layout="vertical"
+                    margin={{ left: 18, right: 12, top: 8, bottom: 8 }}
+                    barCategoryGap={14}
+                  >
+                    <defs>
+                      {ccyGradients.map((g) => (
+                        <linearGradient key={g.id} id={g.id} x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor={g.color} stopOpacity={0.95} />
+                          <stop offset="100%" stopColor={g.color} stopOpacity={0.35} />
+                        </linearGradient>
+                      ))}
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 7" stroke="rgba(120,120,120,0.18)" />
+                    <XAxis
+                      type="number"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 11 }}
+                      tickFormatter={(v) => {
+                        const m = Number(v) / 1_000_000;
+                        return m >= 1 ? `${m.toFixed(1)}m` : `${(Number(v) / 1000).toFixed(0)}k`;
+                      }}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="issuer"
+                      tickLine={false}
+                      axisLine={false}
+                      width={220}
+                      tick={{ fontSize: 11 }}
+                      interval={0}
+                    />
+                    <Tooltip
+                      formatter={(v: any) => formatInt(Number(v))}
+                      contentStyle={{
+                        borderRadius: 16,
+                        border: "1px solid rgba(120,120,120,0.25)",
+                        background: "rgba(255,255,255,0.85)",
+                      }}
+                    />
+                    <Legend iconType="circle" formatter={(value) => <span className="text-xs text-zinc-600">{String(value)}</span>} />
+                    {volumesByIssuerCurrency.currencies.map((ccy) => (
+                      <Bar key={ccy} dataKey={ccy} stackId="v" fill={`url(#grad_ccy_${ccy})`} radius={[12, 12, 12, 12]} barSize={22} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div
+                className="mt-4"
+                style={{ height: Math.max(520, volumesByClientCurrency.data.length * 34 + 80) }}
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={volumesByClientCurrency.data}
+                    layout="vertical"
+                    margin={{ left: 18, right: 12, top: 8, bottom: 8 }}
+                    barCategoryGap={14}
+                  >
+                    <defs>
+                      {ccyGradientsClient.map((g) => (
+                        <linearGradient key={g.id} id={g.id} x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor={g.color} stopOpacity={0.95} />
+                          <stop offset="100%" stopColor={g.color} stopOpacity={0.35} />
+                        </linearGradient>
+                      ))}
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 7" stroke="rgba(120,120,120,0.18)" />
+                    <XAxis
+                      type="number"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 11 }}
+                      tickFormatter={(v) => {
+                        const m = Number(v) / 1_000_000;
+                        return m >= 1 ? `${m.toFixed(1)}m` : `${(Number(v) / 1000).toFixed(0)}k`;
+                      }}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="client"
+                      tickLine={false}
+                      axisLine={false}
+                      width={220}
+                      tick={{ fontSize: 11 }}
+                      interval={0}
+                    />
+                    <Tooltip
+                      formatter={(v: any) => formatInt(Number(v))}
+                      contentStyle={{
+                        borderRadius: 16,
+                        border: "1px solid rgba(120,120,120,0.25)",
+                        background: "rgba(255,255,255,0.85)",
+                      }}
+                    />
+                    <Legend iconType="circle" formatter={(value) => <span className="text-xs text-zinc-600">{String(value)}</span>} />
+                    {volumesByClientCurrency.currencies.map((ccy) => (
+                      <Bar key={ccy} dataKey={ccy} stackId="v" fill={`url(#grad_ccy_client_${ccy})`} radius={[12, 12, 12, 12]} barSize={22} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </GlassCard>
 
           <GlassCard>
