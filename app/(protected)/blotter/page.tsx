@@ -679,8 +679,9 @@ function buildEmlForTrade(args: { trade: TradeRow; legs: LegRow[] }) {
     <title>${htmlEscape(bannerTitle)}</title>
   </head>
   <body style="margin:0; padding:0; font-family: Arial, Helvetica, sans-serif; background:#ffffff; color:#111;">
-    <div style="max-width:820px; margin:0 auto; background:#ffffff;">
-      
+    <table width="820" align="center" cellpadding="0" cellspacing="0" style="max-width:820px; background:#ffffff;">
+      <tr><td>
+
       <div style="background:#002651; padding:22px 24px 14px 24px; text-align:center;">
         <div style="color:#ffffff; font-size:30px; font-weight:700; letter-spacing:0.5px; margin-bottom:10px;">
   Trade Recap
@@ -695,7 +696,9 @@ function buildEmlForTrade(args: { trade: TradeRow; legs: LegRow[] }) {
           ${tableRowsHtml}
         </table>
       </div>
-    </div>
+
+      </td></tr>
+    </table>
   </body>
 </html>`;
 
