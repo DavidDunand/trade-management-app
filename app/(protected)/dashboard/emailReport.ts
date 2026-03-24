@@ -422,7 +422,8 @@ function buildHtml(data: EmailReportData, charts: ChartImages): string {
   <title>P&amp;L Report</title>
 </head>
 <body style="margin:0;padding:24px 12px;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
-  <div style="max-width:660px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.1);">
+  <table width="660" align="center" cellpadding="0" cellspacing="0" style="max-width:660px;background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.1);">
+  <tr><td>
 
     <!-- Header -->
     <div style="background:#002651;padding:28px 36px;">
@@ -480,7 +481,8 @@ function buildHtml(data: EmailReportData, charts: ChartImages): string {
       Generated ${dateStr} &nbsp;&middot;&nbsp; Valeur Paris
     </div>
 
-  </div>
+  </td></tr>
+  </table>
 </body>
 </html>`;
 }
