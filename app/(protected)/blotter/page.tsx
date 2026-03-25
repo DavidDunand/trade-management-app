@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
+import { useProfile } from "../profile-context";
 import NewTradeForm from "../components/NewTradeForm"; // ✅ adjust path if your Blotter page is not in the same folder level
 
 function useUrlState(key: string, defaultValue: string) {
@@ -861,6 +862,9 @@ useEffect(() => {
 
 export default function BlotterPage() {
   const router = useRouter();
+  const profile = useProfile();
+  const isSalesRole = profile?.role === "sales";
+
   const [rows, setRows] = useState<LegRow[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -1001,6 +1005,13 @@ function toggleIssuer(value: string) {
 const [clientFilterRaw, setClientFilterRaw] = useUrlState("client", "")
 const [introducerFilterRaw, setIntroducerFilterRaw] = useUrlState("introducer", "")
 const [salesFilterRaw, setSalesFilterRaw] = useUrlState("sales", "")
+
+// Lock sales filter for sales-role users — runs whenever profile resolves
+useEffect(() => {
+  if (isSalesRole && profile?.salesPersonName) {
+    setSalesFilterRaw(stringifyMulti([profile.salesPersonName]));
+  }
+}, [isSalesRole, profile?.salesPersonName]); // eslint-disable-line react-hooks/exhaustive-deps
 
 const ccyFilter = parseMulti(ccyFilterRaw)
 const clientFilter = parseMulti(clientFilterRaw)
@@ -1748,13 +1759,22 @@ if (distribEntityFilter !== "all" && (t.distributing_entity?.legal_name ?? "") !
   setAll={setAllIntroducer}
 />
 
-<MultiSelect
-  label="Sales"
-  options={salesOptions}
-  selected={salesFilter}
-  toggle={toggleSales}
-  setAll={setAllSales}
-/>
+{isSalesRole ? (
+  <div className="flex flex-col gap-1">
+    <span className="text-xs font-medium text-zinc-500">Sales</span>
+    <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 font-medium">
+      {profile?.salesPersonName ?? "—"}
+    </div>
+  </div>
+) : (
+  <MultiSelect
+    label="Sales"
+    options={salesOptions}
+    selected={salesFilter}
+    toggle={toggleSales}
+    setAll={setAllSales}
+  />
+)}
 
   </div>
 

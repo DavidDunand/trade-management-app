@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
 import FxStatusPanel from "./components/FxStatsPanel";
+import { ProfileContext, type AppProfile } from "./profile-context";
 
 // Icons (lucide-react)
 import {
@@ -23,21 +24,17 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-type Profile = {
-  id: string;
-  email: string | null;
-  full_name: string;
-  role: "admin" | "readonly";
-  active: boolean;
-};
-
 type NavItemDef = {
   href: string;
   label: string;
   icon: React.ElementType;
-  adminOnly?: boolean;
+  adminOnly?: boolean;   // hidden from readonly and sales
+  salesAllowed?: boolean; // explicitly shown to sales (overrides adminOnly for sales)
   disabled?: boolean;
 };
+
+// Routes a sales user is allowed to visit
+const SALES_ALLOWED_ROUTES = ["/dashboard", "/blotter"];
 
 function NavSectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -106,7 +103,8 @@ export default function ProtectedLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const pathname = usePathname();
+  const [profile, setProfile] = useState<AppProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -120,32 +118,37 @@ export default function ProtectedLayout({
       } = await supabase.auth.getSession();
 
       if (!session) {
-        if (!ignore) {
-          setProfile(null);
-          setLoading(false);
-        }
+        if (!ignore) { setProfile(null); setLoading(false); }
         router.replace("/login");
         return;
       }
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("id,email,full_name,role,active")
+        .select("id,email,full_name,role,active,sales_person_id")
         .eq("id", session.user.id)
         .single();
 
       if (error || !data || !data.active) {
         await supabase.auth.signOut();
-        if (!ignore) {
-          setProfile(null);
-          setLoading(false);
-        }
+        if (!ignore) { setProfile(null); setLoading(false); }
         router.replace("/login");
         return;
       }
 
+      // For sales role, resolve their linked sales person full name
+      let salesPersonName: string | null = null;
+      if (data.role === "sales" && data.sales_person_id) {
+        const { data: sp } = await supabase
+          .from("sales_people")
+          .select("first_name,family_name")
+          .eq("id", data.sales_person_id)
+          .single();
+        if (sp) salesPersonName = `${sp.first_name} ${sp.family_name}`;
+      }
+
       if (!ignore) {
-        setProfile(data as Profile);
+        setProfile({ ...data, salesPersonName } as AppProfile);
         setLoading(false);
       }
     };
@@ -164,12 +167,20 @@ export default function ProtectedLayout({
     };
   }, [router]);
 
+  // Route guard: redirect sales users away from restricted pages
+  useEffect(() => {
+    if (!profile || profile.role !== "sales") return;
+    const allowed = SALES_ALLOWED_ROUTES.some((r) => pathname.startsWith(r));
+    if (!allowed) router.replace("/dashboard");
+  }, [profile, pathname, router]);
+
   const isAdmin = profile?.role === "admin";
+  const isSales = profile?.role === "sales";
 
   const tradingItems: NavItemDef[] = useMemo(
     () => [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/blotter", label: "Blotter", icon: ScrollText, adminOnly: true },
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, salesAllowed: true },
+      { href: "/blotter", label: "Blotter", icon: ScrollText, adminOnly: true, salesAllowed: true },
       { href: "/new-trade", label: "New Trade", icon: PlusCircle, adminOnly: true },
     ],
     []
@@ -197,7 +208,12 @@ export default function ProtectedLayout({
   );
 
   const visible = (items: NavItemDef[]) =>
-    items.filter((i) => (i.adminOnly ? isAdmin : true));
+    items.filter((i) => {
+      if (isAdmin) return true;
+      if (isSales) return i.salesAllowed === true;
+      // readonly: hide adminOnly items
+      return !i.adminOnly;
+    });
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -215,6 +231,7 @@ export default function ProtectedLayout({
   if (!profile) return null;
 
   return (
+    <ProfileContext.Provider value={profile}>
     <div className="min-h-screen flex bg-background text-foreground">
       <aside className="w-64 text-white flex flex-col bg-[hsl(var(--primary))]">
         <div className="px-5 py-5 border-b border-white/10">
@@ -269,5 +286,6 @@ export default function ProtectedLayout({
         {children}
       </main>
     </div>
+    </ProfileContext.Provider>
   );
 }
