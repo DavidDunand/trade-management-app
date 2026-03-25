@@ -415,7 +415,7 @@ function buildHtml(data: EmailReportData, charts: ChartImages): string {
   const pendingSection = data.pendingTrades.length === 0
     ? `<p style="font-size:12px;color:#9ca3af;margin:0;">No pending trades.</p>`
     : pendingByDate.map(([dateKey, trades]) =>
-        `<p style="${DATE_SUBTITLE}">Issue Date &nbsp;${fmtDate(dateKey === "—" ? null : dateKey)}</p>` +
+        `<p style="${DATE_SUBTITLE}">Value Date &nbsp;${fmtDate(dateKey === "—" ? null : dateKey)}</p>` +
         buildPendingTable(trades)
       ).join("<div style='height:16px;'></div>");
 
