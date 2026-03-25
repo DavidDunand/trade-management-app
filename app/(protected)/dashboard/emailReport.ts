@@ -23,6 +23,7 @@ export interface PendingTradeEmailRow {
   buyLegs: string[];  // counterparty names on dealer-buy legs
   sellLegs: string[]; // counterparty names on dealer-sell legs
   client: string;
+  valueDate: string | null; // ISO date string, used for grouping
 }
 
 export interface EmailReportData {
@@ -344,46 +345,46 @@ function buildHtml(data: EmailReportData, charts: ChartImages): string {
     `<tbody>${monthRows}${fyRow}</tbody>` +
     `</table>`;
 
-  /* ─── 2. Pending trades table ─── */
-  // Use explicit HTML width attrs (not just CSS) — Outlook compose re-renders
-  // ignore CSS widths but respect the width attribute on td/th.
+  /* ─── 2. Pending trades — grouped by issue date ─── */
   const PT_BASE = "padding:10px 12px;font-size:11px;border-bottom:1px solid #f3f4f6;vertical-align:top;";
-  const PT_CLIENT  = PT_BASE + "font-weight:600;color:#002651;";
-  const PT_ISIN    = PT_BASE + "color:#002651;";
-  const PT_CCY     = PT_BASE + "color:#374151;text-align:right;white-space:nowrap;";
-  const PT_SIZE    = PT_BASE + "color:#374151;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;";
-  const PT_LEGS    = PT_BASE + "color:#374151;";
+  const PT_CLIENT = PT_BASE + "font-weight:600;color:#002651;";
+  const PT_ISIN   = PT_BASE + "color:#002651;";
+  const PT_CCY    = PT_BASE + "color:#374151;text-align:right;white-space:nowrap;";
+  const PT_SIZE   = PT_BASE + "color:#374151;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;";
+  const PT_LEGS   = PT_BASE + "color:#374151;";
 
-  // Badge rendered as a plain table so the label never detaches from the name
   const renderBadge = (label: string, color: string, name: string) =>
-    `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:4px;">` +
-    `<tr>` +
-    `<td style="background:${color};color:#fff;font-size:9px;font-weight:700;` +
-    `padding:1px 4px;border-radius:3px;white-space:nowrap;line-height:14px;vertical-align:middle;">${label}</td>` +
+    `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:4px;"><tr>` +
+    `<td style="background:${color};color:#fff;font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;white-space:nowrap;line-height:14px;vertical-align:middle;">${label}</td>` +
     `<td style="padding-left:5px;font-size:11px;color:#374151;vertical-align:middle;">${esc(name)}</td>` +
     `</tr></table>`;
 
   const fmtSize = (n: number | null) =>
     n == null ? "—" : new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
 
-  const pendingRows = data.pendingTrades.map((r, i) => {
-    const bg = i % 2 === 1 ? "background:#fafafa;" : "";
-    const buyHtml  = r.buyLegs.length  ? r.buyLegs.map((n)  => renderBadge("B", "#2E5FA3", n)).join("") : renderBadge("B", "#9ca3af", "—");
-    const sellHtml = r.sellLegs.length ? r.sellLegs.map((n) => renderBadge("S", "#405363", n)).join("") : renderBadge("S", "#9ca3af", "—");
-    return (
-      `<tr>` +
-      `<td width="130" style="${PT_CLIENT}${bg}">${esc(r.client) || "—"}</td>` +
-      `<td width="180" style="${PT_ISIN}${bg}">${esc(r.isin)}<br/><span style="font-size:10px;font-weight:400;color:#6b7280;">${esc(r.product)}</span></td>` +
-      `<td width="40"  style="${PT_CCY}${bg}">${esc(r.ccy)}</td>` +
-      `<td width="80"  style="${PT_SIZE}${bg}">${fmtSize(r.size)}</td>` +
-      `<td width="170" style="${PT_LEGS}${bg}">${buyHtml}${sellHtml}</td>` +
-      `</tr>`
-    );
-  }).join("");
+  const fmtDate = (iso: string | null) => {
+    if (!iso) return "—";
+    const [y, m, d] = iso.slice(0, 10).split("-");
+    return `${d}.${m}.${y}`;
+  };
 
-  const pendingTable = data.pendingTrades.length === 0
-    ? `<p style="font-size:12px;color:#9ca3af;margin:0;">No pending trades.</p>`
-    : `<table width="600" style="width:100%;border-collapse:collapse;">` +
+  const buildPendingTable = (trades: PendingTradeEmailRow[]) => {
+    const rows = trades.map((r, i) => {
+      const bg = i % 2 === 1 ? "background:#fafafa;" : "";
+      const buyHtml  = r.buyLegs.length  ? r.buyLegs.map((n)  => renderBadge("B", "#2E5FA3", n)).join("") : renderBadge("B", "#9ca3af", "—");
+      const sellHtml = r.sellLegs.length ? r.sellLegs.map((n) => renderBadge("S", "#405363", n)).join("") : renderBadge("S", "#9ca3af", "—");
+      return (
+        `<tr>` +
+        `<td width="130" style="${PT_CLIENT}${bg}">${esc(r.client) || "—"}</td>` +
+        `<td width="180" style="${PT_ISIN}${bg}">${esc(r.isin)}<br/><span style="font-size:10px;font-weight:400;color:#6b7280;">${esc(r.product)}</span></td>` +
+        `<td width="40"  style="${PT_CCY}${bg}">${esc(r.ccy)}</td>` +
+        `<td width="80"  style="${PT_SIZE}${bg}">${fmtSize(r.size)}</td>` +
+        `<td width="170" style="${PT_LEGS}${bg}">${buyHtml}${sellHtml}</td>` +
+        `</tr>`
+      );
+    }).join("");
+    return (
+      `<table width="600" style="width:100%;border-collapse:collapse;">` +
       `<thead><tr>` +
       `<th width="130" style="${TH_L}">Client</th>` +
       `<th width="180" style="${TH_L}">ISIN / Product</th>` +
@@ -391,8 +392,32 @@ function buildHtml(data: EmailReportData, charts: ChartImages): string {
       `<th width="80"  style="${TH_R}">Size</th>` +
       `<th width="170" style="${TH_L}">Legs</th>` +
       `</tr></thead>` +
-      `<tbody>${pendingRows}</tbody>` +
-      `</table>`;
+      `<tbody>${rows}</tbody>` +
+      `</table>`
+    );
+  };
+
+  // Group pending trades by value_date, sorted ascending
+  const pendingByDate = (() => {
+    const map = new Map<string, PendingTradeEmailRow[]>();
+    for (const t of data.pendingTrades) {
+      const key = t.valueDate ?? "—";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(t);
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+  })();
+
+  const DATE_SUBTITLE =
+    "font-size:11px;font-weight:700;color:#002651;letter-spacing:0.06em;" +
+    "text-transform:uppercase;margin:16px 0 8px 0;";
+
+  const pendingSection = data.pendingTrades.length === 0
+    ? `<p style="font-size:12px;color:#9ca3af;margin:0;">No pending trades.</p>`
+    : pendingByDate.map(([dateKey, trades]) =>
+        `<p style="${DATE_SUBTITLE}">Issue Date &nbsp;${fmtDate(dateKey === "—" ? null : dateKey)}</p>` +
+        buildPendingTable(trades)
+      ).join("<div style='height:16px;'></div>");
 
   /* ─── 3. Donut charts — PNG srcs pre-computed asynchronously ─── */
   const entityDonutImg = imgTag(charts.entityDonutSrc, 200, 200);
@@ -503,7 +528,7 @@ function buildHtml(data: EmailReportData, charts: ChartImages): string {
     <!-- 2. Pending Trades -->
     <div style="${SEC}">
       <p style="${TITLE}">Pending Trades</p>
-      ${pendingTable}
+      ${pendingSection}
     </div>
 
     <!-- 3. Donut charts (side by side via table for email compat) -->

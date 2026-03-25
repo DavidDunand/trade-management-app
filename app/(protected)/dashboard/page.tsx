@@ -878,6 +878,7 @@ const ccyGradients = useMemo(() => {
         total_size,
         client_name,
         sales_name,
+        value_date,
         product:product_id(isin, product_name, currency),
         legs:trade_legs(leg, counterparty:counterparty_id(legal_name))
       `)
@@ -899,6 +900,7 @@ const ccyGradients = useMemo(() => {
         buyLegs: legs.filter((l) => l.leg === "buy").map((l) => l.counterparty?.legal_name ?? "").filter(Boolean),
         sellLegs: legs.filter((l) => l.leg === "sell").map((l) => l.counterparty?.legal_name ?? "").filter(Boolean),
         client: t.client_name ?? "",
+        valueDate: t.value_date ?? null,
       };
     });
 
