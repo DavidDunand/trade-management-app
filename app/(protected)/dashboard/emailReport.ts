@@ -15,6 +15,16 @@ export interface PnlRow {
   total: number;
 }
 
+export interface PendingTradeEmailRow {
+  isin: string;
+  product: string;
+  ccy: string;
+  size: number | null;
+  buyLegs: string[];  // counterparty names on dealer-buy legs
+  sellLegs: string[]; // counterparty names on dealer-sell legs
+  client: string;
+}
+
 export interface EmailReportData {
   year: string;
   sales: string;
@@ -29,6 +39,7 @@ export interface EmailReportData {
     currencies: string[];
   };
   tradesByIssuer: { issuer: string; trades: number; weight: number }[];
+  pendingTrades: PendingTradeEmailRow[];
 }
 
 // ─── Colours ─────────────────────────────────────────────────────────────────
@@ -333,7 +344,57 @@ function buildHtml(data: EmailReportData, charts: ChartImages): string {
     `<tbody>${monthRows}${fyRow}</tbody>` +
     `</table>`;
 
-  /* ─── 2. Donut charts — PNG srcs pre-computed asynchronously ─── */
+  /* ─── 2. Pending trades table ─── */
+  // Use explicit HTML width attrs (not just CSS) — Outlook compose re-renders
+  // ignore CSS widths but respect the width attribute on td/th.
+  const PT_BASE = "padding:10px 12px;font-size:11px;border-bottom:1px solid #f3f4f6;vertical-align:top;";
+  const PT_CLIENT  = PT_BASE + "font-weight:600;color:#002651;";
+  const PT_ISIN    = PT_BASE + "color:#002651;";
+  const PT_CCY     = PT_BASE + "color:#374151;text-align:right;white-space:nowrap;";
+  const PT_SIZE    = PT_BASE + "color:#374151;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;";
+  const PT_LEGS    = PT_BASE + "color:#374151;";
+
+  // Badge rendered as a plain table so the label never detaches from the name
+  const renderBadge = (label: string, color: string, name: string) =>
+    `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:4px;">` +
+    `<tr>` +
+    `<td style="background:${color};color:#fff;font-size:9px;font-weight:700;` +
+    `padding:1px 4px;border-radius:3px;white-space:nowrap;line-height:14px;vertical-align:middle;">${label}</td>` +
+    `<td style="padding-left:5px;font-size:11px;color:#374151;vertical-align:middle;">${esc(name)}</td>` +
+    `</tr></table>`;
+
+  const fmtSize = (n: number | null) =>
+    n == null ? "—" : new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
+
+  const pendingRows = data.pendingTrades.map((r, i) => {
+    const bg = i % 2 === 1 ? "background:#fafafa;" : "";
+    const buyHtml  = r.buyLegs.length  ? r.buyLegs.map((n)  => renderBadge("B", "#2E5FA3", n)).join("") : renderBadge("B", "#9ca3af", "—");
+    const sellHtml = r.sellLegs.length ? r.sellLegs.map((n) => renderBadge("S", "#405363", n)).join("") : renderBadge("S", "#9ca3af", "—");
+    return (
+      `<tr>` +
+      `<td width="130" style="${PT_CLIENT}${bg}">${esc(r.client) || "—"}</td>` +
+      `<td width="180" style="${PT_ISIN}${bg}">${esc(r.isin)}<br/><span style="font-size:10px;font-weight:400;color:#6b7280;">${esc(r.product)}</span></td>` +
+      `<td width="40"  style="${PT_CCY}${bg}">${esc(r.ccy)}</td>` +
+      `<td width="80"  style="${PT_SIZE}${bg}">${fmtSize(r.size)}</td>` +
+      `<td width="170" style="${PT_LEGS}${bg}">${buyHtml}${sellHtml}</td>` +
+      `</tr>`
+    );
+  }).join("");
+
+  const pendingTable = data.pendingTrades.length === 0
+    ? `<p style="font-size:12px;color:#9ca3af;margin:0;">No pending trades.</p>`
+    : `<table width="600" style="width:100%;border-collapse:collapse;">` +
+      `<thead><tr>` +
+      `<th width="130" style="${TH_L}">Client</th>` +
+      `<th width="180" style="${TH_L}">ISIN / Product</th>` +
+      `<th width="40"  style="${TH_R}">CCY</th>` +
+      `<th width="80"  style="${TH_R}">Size</th>` +
+      `<th width="170" style="${TH_L}">Legs</th>` +
+      `</tr></thead>` +
+      `<tbody>${pendingRows}</tbody>` +
+      `</table>`;
+
+  /* ─── 3. Donut charts — PNG srcs pre-computed asynchronously ─── */
   const entityDonutImg = imgTag(charts.entityDonutSrc, 200, 200);
   const entityLegend = legendStrip(
     data.pnlByBookingEntity.map((x, i) => ({
@@ -352,7 +413,7 @@ function buildHtml(data: EmailReportData, charts: ChartImages): string {
     }))
   );
 
-  /* ─── 3. Clients P&L table (full number format) ─── */
+  /* ─── 4. Clients P&L table (full number format) ─── */
   const clientRows = data.clientsAll
     .map((x) => {
       const barW = Math.max(2, Math.round(Math.max(0, x.weight) * 80));
@@ -379,14 +440,14 @@ function buildHtml(data: EmailReportData, charts: ChartImages): string {
     `<tbody>${clientRows}</tbody>` +
     `</table>`;
 
-  /* ─── 4. Volumes by issuer — PNG src pre-computed asynchronously ─── */
+  /* ─── 5. Volumes by issuer — PNG src pre-computed asynchronously ─── */
   const { currencies } = data.volumesByIssuerCurrency;
   const volBarImg = imgTag(charts.volBarSrc, 560, charts.volBarHeight);
   const volLegend = legendStrip(
     currencies.map((ccy) => ({ label: ccy, color: ccyColor(ccy) }))
   );
 
-  /* ─── 5. Number Trades by Issuer table ─── */
+  /* ─── 6. Number Trades by Issuer table ─── */
   const tradesRows = data.tradesByIssuer
     .map((x) => {
       const barW = Math.max(2, Math.round(Math.max(0, x.weight) * 80));
@@ -439,7 +500,13 @@ function buildHtml(data: EmailReportData, charts: ChartImages): string {
       ${pnlTable}
     </div>
 
-    <!-- 2. Donut charts (side by side via table for email compat) -->
+    <!-- 2. Pending Trades -->
+    <div style="${SEC}">
+      <p style="${TITLE}">Pending Trades</p>
+      ${pendingTable}
+    </div>
+
+    <!-- 3. Donut charts (side by side via table for email compat) -->
     <div style="${SEC}">
       <table style="width:100%;border-collapse:collapse;">
         <tr>
@@ -457,20 +524,20 @@ function buildHtml(data: EmailReportData, charts: ChartImages): string {
       </table>
     </div>
 
-    <!-- 3. Clients P&L -->
+    <!-- 4. Clients P&L -->
     <div style="${SEC}">
       <p style="${TITLE}">Clients &mdash; P&amp;L</p>
       ${clientsTable}
     </div>
 
-    <!-- 4. Volumes by Issuer -->
+    <!-- 5. Volumes by Issuer -->
     <div style="${SEC}">
       <p style="${TITLE}">Volumes by Issuer</p>
       ${volBarImg}
       <div style="margin-top:10px;">${volLegend}</div>
     </div>
 
-    <!-- 5. Number of Trades by Issuer -->
+    <!-- 6. Number of Trades by Issuer -->
     <div style="${SEC_LAST}">
       <p style="${TITLE}">Number of Trades by Issuer</p>
       ${tradesTable}
