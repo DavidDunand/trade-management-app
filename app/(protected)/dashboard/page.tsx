@@ -34,6 +34,7 @@ import {
   Mail,
 } from "lucide-react";
 import { downloadEmailReport, type EmailReportData, type PendingTradeEmailRow } from "./emailReport";
+import { useProfile } from "../profile-context";
 
 type Row = {
   id: string;
@@ -324,6 +325,9 @@ function ymKey(d: Date) {
 
 export default function AnalyticsPage() {
   const router = useRouter();
+  const profile = useProfile();
+  const isSalesRole = profile?.role === "sales";
+
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -429,6 +433,13 @@ useEffect(() => {
   useEffect(() => {
     if (!year && years.length) setYear(years[0]);
   }, [year, years]);
+
+  // Lock sales filter for sales-role users
+  useEffect(() => {
+    if (isSalesRole && profile?.salesPersonName) {
+      setSales(profile.salesPersonName);
+    }
+  }, [isSalesRole, profile?.salesPersonName]);
 
   useEffect(() => {
     if (sales === "All") {
@@ -977,7 +988,16 @@ const ccyGradientsClient = useMemo(() => {
 
           <div className="flex flex-wrap gap-3 items-end">
             <Select label="Year" value={year} options={years} onChange={setYear} />
-            <Select label="Sales" value={sales} options={salesList} onChange={setSales} />
+            {isSalesRole ? (
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-zinc-500">Sales</span>
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 font-medium">
+                  {sales}
+                </div>
+              </div>
+            ) : (
+              <Select label="Sales" value={sales} options={salesList} onChange={setSales} />
+            )}
             <button
               onClick={handleEmailReport}
               className="flex items-center gap-2 rounded-xl bg-[#002651] text-white px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
