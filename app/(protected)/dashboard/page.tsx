@@ -33,7 +33,7 @@ import {
   ArrowRight,
   Mail,
 } from "lucide-react";
-import { downloadEmailReport, type EmailReportData } from "./emailReport";
+import { downloadEmailReport, type EmailReportData, type PendingTradeEmailRow } from "./emailReport";
 
 type Row = {
   id: string;
@@ -859,6 +859,38 @@ const ccyGradients = useMemo(() => {
 }, [volumesByIssuerCurrency.currencies]);
 
   const handleEmailReport = async () => {
+    // Fetch pending trades for the email (separate query — not in analytics view)
+    let pendingQuery = supabase
+      .from("trades")
+      .select(`
+        id,
+        total_size,
+        client_name,
+        sales_name,
+        product:product_id(isin, product_name, currency),
+        legs:trade_legs(leg, counterparty:counterparty_id(legal_name))
+      `)
+      .eq("status", "pending");
+
+    if (sales !== "All") {
+      pendingQuery = pendingQuery.eq("sales_name", sales);
+    }
+
+    const { data: pendingRaw } = await pendingQuery.order("created_at", { ascending: false });
+
+    const pendingTrades: PendingTradeEmailRow[] = (pendingRaw ?? []).map((t: any) => {
+      const legs: { leg: string; counterparty: { legal_name: string } | null }[] = t.legs ?? [];
+      return {
+        isin: t.product?.isin ?? "",
+        product: t.product?.product_name ?? "",
+        ccy: t.product?.currency ?? "",
+        size: t.total_size ?? null,
+        buyLegs: legs.filter((l) => l.leg === "buy").map((l) => l.counterparty?.legal_name ?? "").filter(Boolean),
+        sellLegs: legs.filter((l) => l.leg === "sell").map((l) => l.counterparty?.legal_name ?? "").filter(Boolean),
+        client: t.client_name ?? "",
+      };
+    });
+
     const data: EmailReportData = {
       year,
       sales,
@@ -870,6 +902,7 @@ const ccyGradients = useMemo(() => {
       clientsAll,
       volumesByIssuerCurrency,
       tradesByIssuer,
+      pendingTrades,
     };
     await downloadEmailReport(data);
   };
