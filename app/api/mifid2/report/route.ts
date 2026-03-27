@@ -278,10 +278,24 @@ ws.getCell(`AS${rowIdx}`).value = netAmount;
     .single();
 
   if (!repErr && reportRow?.id) {
+    // Preserve any previously confirmed ARM statuses so regenerating a report
+    // does not silently revert a confirmed trade back to pending.
+    const { data: existingLinks } = await supabase
+      .from("mifid_report_trades")
+      .select("trade_id, arm_status")
+      .in("trade_id", tradeIds);
+
+    const confirmedIds = new Set(
+      (existingLinks ?? [])
+        .filter((l: any) => l.arm_status === "confirmed")
+        .map((l: any) => l.trade_id)
+    );
+
     await supabase.from("mifid_report_trades").insert(
       tradeIds.map((id) => ({
         report_id: reportRow.id,
         trade_id: id,
+        arm_status: confirmedIds.has(id) ? "confirmed" : "pending",
       }))
     );
 await supabase.rpc("increment_mifid_download", {
