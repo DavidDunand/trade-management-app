@@ -371,8 +371,9 @@ function buildHtml(data: EmailReportData, charts: ChartImages): string {
   const buildPendingTable = (trades: PendingTradeEmailRow[]) => {
     const rows = trades.map((r, i) => {
       const bg = i % 2 === 1 ? "background:#fafafa;" : "";
-      const buyHtml  = r.buyLegs.length  ? r.buyLegs.map((n)  => renderBadge("B", "#2E5FA3", n)).join("") : renderBadge("B", "#9ca3af", "—");
-      const sellHtml = r.sellLegs.length ? r.sellLegs.map((n) => renderBadge("S", "#405363", n)).join("") : renderBadge("S", "#9ca3af", "—");
+      // leg field is dealer-perspective: dealer "buy" leg = counterparty is the seller (S); dealer "sell" leg = counterparty is the buyer (B)
+      const buyHtml  = r.buyLegs.length  ? r.buyLegs.map((n)  => renderBadge("S", "#405363", n)).join("") : renderBadge("S", "#9ca3af", "—");
+      const sellHtml = r.sellLegs.length ? r.sellLegs.map((n) => renderBadge("B", "#2E5FA3", n)).join("") : renderBadge("B", "#9ca3af", "—");
       return (
         `<tr>` +
         `<td width="130" style="${PT_CLIENT}${bg}">${esc(r.client) || "—"}</td>` +
