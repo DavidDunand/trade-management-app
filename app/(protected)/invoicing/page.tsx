@@ -179,7 +179,7 @@ function CcyBreakdown({ map }: { map: Map<string, number> }) {
 
 // ─── Invoice PDF generator ────────────────────────────────────────────────────
 
-function generateInvoicePdf(
+async function generateInvoicePdf(
   trade: TradeRow,
   senderBilling: BillingRecord | null,
   bankAccount: BankAccountRecord | null,
@@ -316,12 +316,31 @@ function generateInvoicePdf(
 </body>
 </html>`;
 
-  const win = window.open("", "_blank", "width=960,height=720");
-  if (!win) return;
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 600);
+  // Render HTML in a hidden off-screen iframe, capture with html-to-image,
+  // then embed in jsPDF for a clean download (no browser print headers/footers).
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText = "position:fixed;left:-9999px;top:0;width:794px;border:none;visibility:hidden;";
+  document.body.appendChild(iframe);
+  try {
+    iframe.contentDocument!.open();
+    iframe.contentDocument!.write(html);
+    iframe.contentDocument!.close();
+    // Wait for fonts/layout to settle
+    await new Promise((r) => setTimeout(r, 600));
+    const body = iframe.contentDocument!.body;
+    const contentHeight = body.scrollHeight;
+    iframe.style.height = `${contentHeight}px`;
+    const { toPng } = await import("html-to-image");
+    const dataUrl = await toPng(body, { width: 794, pixelRatio: 4 });
+    const { jsPDF } = await import("jspdf");
+    const pdfW = 210; // A4 width in mm
+    const pdfH = (contentHeight / 794) * pdfW;
+    const pdf = new jsPDF({ unit: "mm", format: pdfH <= 297 ? "a4" : [pdfW, pdfH] });
+    pdf.addImage(dataUrl, "PNG", 0, 0, pdfW, pdfH <= 297 ? 297 : pdfH);
+    pdf.save(`${invoiceNumber}.pdf`);
+  } finally {
+    document.body.removeChild(iframe);
+  }
 }
 
 // ─── UI helpers ────────────────────────────────────────────────────────────────
@@ -544,13 +563,11 @@ export default function InvoicingPage() {
         { data: invData },
         { data: retroData },
         { data: legData },
-        { data: internalCpData },
         { data: rrEntityData },
       ] = await Promise.all([
         supabase.from("invoices").select("id, trade_id, downloaded_at, payment_status, created_at").in("trade_id", tradeIds),
         supabase.from("retro_payments").select("id, trade_id, recipient_type, payment_status, created_at").in("trade_id", tradeIds),
         supabase.from("trade_legs").select("trade_id, counterparty:counterparty_id(legal_name, cp_type)").in("trade_id", tradeIds),
-        supabase.from("counterparties").select("id").eq("cp_type", "internal").maybeSingle(),
         supabase.from("group_entities").select("legal_name").eq("entity_type", "riverrock").maybeSingle(),
       ]);
 
@@ -586,6 +603,11 @@ export default function InvoicingPage() {
       if (rrEntity?.legal_name) setRiverrockEntityName(rrEntity.legal_name);
 
       // Sender (internal) billing + bank accounts
+      // Use RiverRock entity name (from entity_type, not hardcoded) to disambiguate
+      // when multiple counterparties share cp_type = 'internal'
+      const { data: internalCpData } = rrEntity?.legal_name
+        ? await supabase.from("counterparties").select("id").eq("cp_type", "internal").eq("legal_name", rrEntity.legal_name).maybeSingle()
+        : { data: null };
       const internalCp = internalCpData as { id: string } | null;
       if (internalCp) {
         const [{ data: billing }, { data: banks }] = await Promise.all([
@@ -751,7 +773,7 @@ export default function InvoicingPage() {
     dealerBilling: BillingRecord | null,
     dealerName: string
   ) {
-    generateInvoicePdf(trade, senderBilling, bankAccount, dealerBilling, dealerName, riverrockEntityName);
+    await generateInvoicePdf(trade, senderBilling, bankAccount, dealerBilling, dealerName, riverrockEntityName);
 
     // Track download
     const existing = invoiceMap.get(trade.id);
