@@ -292,7 +292,7 @@ async function generateInvoicePdf(
     </thead>
     <tbody>
       <tr>
-        <td>${he(ref)} — ${he(productName)}</td>
+        <td>${he(productName)}</td>
         <td><strong>${he(isin)}</strong></td>
         <td>${he(tradeDate)}</td>
         <td>${he(valueDate)}</td>
@@ -330,13 +330,13 @@ async function generateInvoicePdf(
     const body = iframe.contentDocument!.body;
     const contentHeight = body.scrollHeight;
     iframe.style.height = `${contentHeight}px`;
-    const { toPng } = await import("html-to-image");
-    const dataUrl = await toPng(body, { width: 794, pixelRatio: 4 });
+    const { toJpeg } = await import("html-to-image");
+    const dataUrl = await toJpeg(body, { width: 794, pixelRatio: 2, quality: 0.85 });
     const { jsPDF } = await import("jspdf");
     const pdfW = 210; // A4 width in mm
     const pdfH = (contentHeight / 794) * pdfW;
     const pdf = new jsPDF({ unit: "mm", format: pdfH <= 297 ? "a4" : [pdfW, pdfH] });
-    pdf.addImage(dataUrl, "PNG", 0, 0, pdfW, pdfH <= 297 ? 297 : pdfH);
+    pdf.addImage(dataUrl, "JPEG", 0, 0, pdfW, pdfH <= 297 ? 297 : pdfH);
     pdf.save(`${invoiceNumber}.pdf`);
   } finally {
     document.body.removeChild(iframe);
