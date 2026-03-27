@@ -971,6 +971,7 @@ const ccyGradientsClient = useMemo(() => {
       pnlByTxnType,
       clientsAll,
       volumesByIssuerCurrency,
+      volumesByClientCurrency,
       tradesByIssuer,
       pendingTrades,
     };

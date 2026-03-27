@@ -39,6 +39,10 @@ export interface EmailReportData {
     data: ({ issuer: string; _total: number } & Record<string, number | string>)[];
     currencies: string[];
   };
+  volumesByClientCurrency: {
+    data: ({ client: string; _total: number } & Record<string, number | string>)[];
+    currencies: string[];
+  };
   tradesByIssuer: { issuer: string; trades: number; weight: number }[];
   pendingTrades: PendingTradeEmailRow[];
 }
@@ -213,8 +217,9 @@ function buildDonutSvg(
 // ─── SVG Stacked Horizontal Bar chart ────────────────────────────────────────
 
 function buildStackedBarsSvg(
-  data: ({ issuer: string; _total: number } & Record<string, number | string>)[],
+  data: ({ _total: number } & Record<string, number | string>)[],
   currencies: string[],
+  labelKey: string,
   svgW = 560
 ): string {
   const ROW_H = 20;
@@ -232,7 +237,7 @@ function buildStackedBarsSvg(
     content +=
       `<text x="${LABEL_W - 6}" y="${(y + ROW_H * 0.73).toFixed(1)}" ` +
       `text-anchor="end" font-size="10.5" fill="#374151" font-family="Arial,sans-serif">` +
-      `${esc(String(d.issuer))}</text>`;
+      `${esc(String(d[labelKey]))}</text>`;
 
     let bx = LABEL_W;
     for (const ccy of currencies) {
@@ -279,6 +284,8 @@ interface ChartImages {
   txnDonutSrc: string;
   volBarSrc: string;
   volBarHeight: number;
+  volClientBarSrc: string;
+  volClientBarHeight: number;
 }
 
 function buildHtml(data: EmailReportData, charts: ChartImages): string {
@@ -466,7 +473,14 @@ function buildHtml(data: EmailReportData, charts: ChartImages): string {
     `<tbody>${clientRows}</tbody>` +
     `</table>`;
 
-  /* ─── 5. Volumes by issuer — PNG src pre-computed asynchronously ─── */
+  /* ─── 5a. Volumes by client ─── */
+  const { currencies: clientCurrencies } = data.volumesByClientCurrency;
+  const volClientBarImg = imgTag(charts.volClientBarSrc, 560, charts.volClientBarHeight);
+  const volClientLegend = legendStrip(
+    clientCurrencies.map((ccy) => ({ label: ccy, color: ccyColor(ccy) }))
+  );
+
+  /* ─── 5b. Volumes by issuer ─── */
   const { currencies } = data.volumesByIssuerCurrency;
   const volBarImg = imgTag(charts.volBarSrc, 560, charts.volBarHeight);
   const volLegend = legendStrip(
@@ -556,7 +570,14 @@ function buildHtml(data: EmailReportData, charts: ChartImages): string {
       ${clientsTable}
     </div>
 
-    <!-- 5. Volumes by Issuer -->
+    <!-- 5a. Volumes by Client -->
+    <div style="${SEC}">
+      <p style="${TITLE}">Volumes by Client</p>
+      ${volClientBarImg}
+      <div style="margin-top:10px;">${volClientLegend}</div>
+    </div>
+
+    <!-- 5b. Volumes by Issuer -->
     <div style="${SEC}">
       <p style="${TITLE}">Volumes by Issuer</p>
       ${volBarImg}
@@ -600,16 +621,21 @@ export async function downloadEmailReport(data: EmailReportData): Promise<void> 
     color: TXN_COLORS[x.type] ?? "#405363",
   }));
   const { data: volData, currencies } = data.volumesByIssuerCurrency;
-  const volBarSvg = buildStackedBarsSvg(volData, currencies, 560);
+  const volBarSvg = buildStackedBarsSvg(volData, currencies, "issuer", 560);
   const volBarHeight = Math.max(60, volData.length * 28 + 6);
 
-  const [entityDonutSrc, txnDonutSrc, volBarSrc] = await Promise.all([
+  const { data: volClientData, currencies: clientCurrencies } = data.volumesByClientCurrency;
+  const volClientBarSvg = buildStackedBarsSvg(volClientData, clientCurrencies, "client", 560);
+  const volClientBarHeight = Math.max(60, volClientData.length * 28 + 6);
+
+  const [entityDonutSrc, txnDonutSrc, volBarSrc, volClientBarSrc] = await Promise.all([
     svgToPngDataUrl(buildDonutSvg(entitySegments, 200), 200, 200),
     svgToPngDataUrl(buildDonutSvg(txnSegments, 200), 200, 200),
     svgToPngDataUrl(volBarSvg, 560, volBarHeight),
+    svgToPngDataUrl(volClientBarSvg, 560, volClientBarHeight),
   ]);
 
-  const html = buildHtml(data, { entityDonutSrc, txnDonutSrc, volBarSrc, volBarHeight });
+  const html = buildHtml(data, { entityDonutSrc, txnDonutSrc, volBarSrc, volBarHeight, volClientBarSrc, volClientBarHeight });
 
   const eml = [
     "MIME-Version: 1.0",
