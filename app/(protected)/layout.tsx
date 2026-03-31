@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/src/lib/supabase";
 import FxStatusPanel from "./components/FxStatsPanel";
+import MifidNavBadge from "./components/MifidNavBadge";
 import { ProfileContext, type AppProfile } from "./profile-context";
 
 // Icons (lucide-react)
@@ -46,7 +47,7 @@ function NavSectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-function NavItem({ item }: { item: NavItemDef }) {
+function NavItem({ item, badge }: { item: NavItemDef; badge?: React.ReactNode }) {
   const pathname = usePathname();
   const active = pathname === item.href;
   const Icon = item.icon;
@@ -87,12 +88,14 @@ function NavItem({ item }: { item: NavItemDef }) {
 
       <span className="truncate">{item.label}</span>
 
-      <ChevronRight
-        className={[
-          "ml-auto h-4 w-4 opacity-0 transition-opacity",
-          active ? "opacity-70" : "group-hover:opacity-40",
-        ].join(" ")}
-      />
+      {badge ?? (
+        <ChevronRight
+          className={[
+            "ml-auto h-4 w-4 opacity-0 transition-opacity",
+            active ? "opacity-70" : "group-hover:opacity-40",
+          ].join(" ")}
+        />
+      )}
     </Link>
   );
 }
@@ -253,7 +256,11 @@ export default function ProtectedLayout({
             <NavSectionTitle>Documentation</NavSectionTitle>
             <div className="space-y-1">
               {visible(docItems).map((item) => (
-                <NavItem key={item.href} item={item} />
+                <NavItem
+                  key={item.href}
+                  item={item}
+                  badge={item.href === "/transaction-reporting" ? <MifidNavBadge /> : undefined}
+                />
               ))}
             </div>
 
