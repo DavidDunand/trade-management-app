@@ -2,6 +2,7 @@
 export const dynamic = "force-dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/src/lib/supabase";
+import { useProfile } from "../profile-context";
 import { Pencil, Trash2 } from "lucide-react";
 
 type SalesPerson = {
@@ -12,6 +13,7 @@ type SalesPerson = {
 };
 
 export default function SalesPage() {
+  const isAdmin = useProfile()?.role === "admin";
   const [rows, setRows] = useState<SalesPerson[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -136,7 +138,7 @@ export default function SalesPage() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-black/10 p-5">
+      {isAdmin && <div className="rounded-2xl border border-black/10 p-5">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <input
             value={firstName}
@@ -163,7 +165,7 @@ export default function SalesPage() {
             Add
           </button>
         </div>
-      </div>
+      </div>}
 
       <div className="rounded-2xl border border-black/10 overflow-hidden">
         {/* removed global font-bold */}
@@ -227,7 +229,7 @@ export default function SalesPage() {
                   </td>
 
                   <td className="p-3">
-                    {isEdit ? (
+                    {isAdmin && (isEdit ? (
                       <div className="flex justify-end gap-2">
                         <button
                           onClick={saveEdit}
@@ -264,7 +266,7 @@ export default function SalesPage() {
                           <Trash2 className="h-4 w-4 text-red-600" />
                         </button>
                       </div>
-                    )}
+                    ))}
                   </td>
                 </tr>
               );

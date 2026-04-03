@@ -2,6 +2,7 @@
 export const dynamic = "force-dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/src/lib/supabase";
+import { useProfile } from "../profile-context";
 import { Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Building2, Plus, X, Users } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -85,6 +86,7 @@ const emptyBillingDraft = {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function CounterpartiesPage() {
+  const isAdmin = useProfile()?.role === "admin";
   const [rows, setRows] = useState<Counterparty[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -444,24 +446,26 @@ export default function CounterpartiesPage() {
       </div>
 
       {/* Add form */}
-      <div className="rounded-2xl border border-black/10 p-5 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-          <select
-            value={cpTypeLabel[cpType]}
-            onChange={(e) => setCpType(labelToCpType[e.target.value])}
-            className="rounded-xl border border-black/20 px-3 py-2 bg-white text-sm font-bold"
-          >
-            {Object.values(cpTypeLabel).map((lbl) => (
-              <option key={lbl} value={lbl}>{lbl}</option>
-            ))}
-          </select>
-          <input value={legalName} onChange={(e) => setLegalName(e.target.value)} placeholder="Legal Name" className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold md:col-span-2" />
-          <input value={countryCode} onChange={(e) => setCountryCode(e.target.value)} placeholder="Country Code (FR)" className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold" />
-          <button onClick={addRow} className="rounded-xl bg-[#002651] text-white px-4 py-2 text-sm font-bold hover:opacity-95">Add</button>
-          <input value={lei} onChange={(e) => setLei(e.target.value)} placeholder="LEI (optional)" className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold md:col-span-2" />
-          <input value={ssi} onChange={(e) => setSsi(e.target.value)} placeholder="SSI (optional)" className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold md:col-span-2" />
+      {isAdmin && (
+        <div className="rounded-2xl border border-black/10 p-5 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <select
+              value={cpTypeLabel[cpType]}
+              onChange={(e) => setCpType(labelToCpType[e.target.value])}
+              className="rounded-xl border border-black/20 px-3 py-2 bg-white text-sm font-bold"
+            >
+              {Object.values(cpTypeLabel).map((lbl) => (
+                <option key={lbl} value={lbl}>{lbl}</option>
+              ))}
+            </select>
+            <input value={legalName} onChange={(e) => setLegalName(e.target.value)} placeholder="Legal Name" className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold md:col-span-2" />
+            <input value={countryCode} onChange={(e) => setCountryCode(e.target.value)} placeholder="Country Code (FR)" className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold" />
+            <button onClick={addRow} className="rounded-xl bg-[#002651] text-white px-4 py-2 text-sm font-bold hover:opacity-95">Add</button>
+            <input value={lei} onChange={(e) => setLei(e.target.value)} placeholder="LEI (optional)" className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold md:col-span-2" />
+            <input value={ssi} onChange={(e) => setSsi(e.target.value)} placeholder="SSI (optional)" className="rounded-xl border border-black/20 px-3 py-2 text-sm font-bold md:col-span-2" />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Table */}
       <div className="rounded-2xl border border-black/10 overflow-hidden">
@@ -529,7 +533,7 @@ export default function CounterpartiesPage() {
                   <td className="p-3">
                     {isEdit ? (
                       <div className="flex justify-end gap-2">
-                        <button onClick={saveEdit} className="rounded-lg bg-[#002651] text-white px-3 py-1 text-sm hover:opacity-95">Save</button>
+                        {isAdmin && <button onClick={saveEdit} className="rounded-lg bg-[#002651] text-white px-3 py-1 text-sm hover:opacity-95">Save</button>}
                         <button onClick={cancelEdit} className="rounded-lg border border-black/20 px-3 py-1 text-sm hover:bg-black/5">Cancel</button>
                       </div>
                     ) : (
@@ -552,12 +556,16 @@ export default function CounterpartiesPage() {
                           <Building2 className="h-3.5 w-3.5" />
                           Billing
                         </button>
-                        <button type="button" onClick={() => startEdit(r)} className={iconBtn} title="Edit" aria-label="Edit counterparty">
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button type="button" onClick={() => removeRow(r.id)} className={iconBtn + " hover:bg-red-50"} title="Delete" aria-label="Delete counterparty">
-                          <Trash2 className="h-4 w-4 text-red-600" />
-                        </button>
+                        {isAdmin && (
+                          <button type="button" onClick={() => startEdit(r)} className={iconBtn} title="Edit" aria-label="Edit counterparty">
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                        )}
+                        {isAdmin && (
+                          <button type="button" onClick={() => removeRow(r.id)} className={iconBtn + " hover:bg-red-50"} title="Delete" aria-label="Delete counterparty">
+                            <Trash2 className="h-4 w-4 text-red-600" />
+                          </button>
+                        )}
                       </div>
                     )}
                   </td>
@@ -591,6 +599,7 @@ export default function CounterpartiesPage() {
 
             <div className="p-5 space-y-4 overflow-y-auto">
               {/* Add contact form */}
+              {isAdmin && (
               <div className="rounded-2xl border border-black/10 p-4 space-y-3">
                 <div className="grid grid-cols-3 gap-3">
                   <input
@@ -622,6 +631,7 @@ export default function CounterpartiesPage() {
                   </button>
                 </div>
               </div>
+              )}
 
               {/* Contacts list */}
               <div className="rounded-2xl border border-black/10 overflow-x-auto">
@@ -681,17 +691,21 @@ export default function CounterpartiesPage() {
                           <td className="p-3">
                             {isEdit ? (
                               <div className="flex justify-end gap-2 whitespace-nowrap">
-                                <button onClick={saveContactEdit} className="rounded-lg bg-[#002651] text-white px-3 py-1 text-sm hover:opacity-95">Save</button>
+                                {isAdmin && <button onClick={saveContactEdit} className="rounded-lg bg-[#002651] text-white px-3 py-1 text-sm hover:opacity-95">Save</button>}
                                 <button onClick={cancelContactEdit} className="rounded-lg border border-black/20 px-3 py-1 text-sm hover:bg-black/5">Cancel</button>
                               </div>
                             ) : (
                               <div className="flex justify-end items-center gap-2 whitespace-nowrap">
-                                <button type="button" onClick={() => startContactEdit(c)} className={iconBtn} title="Edit" aria-label="Edit contact">
-                                  <Pencil className="h-4 w-4" />
-                                </button>
-                                <button type="button" onClick={() => deleteCpContact(c.id)} className={iconBtn + " hover:bg-red-50"} title="Delete" aria-label="Delete contact">
-                                  <Trash2 className="h-4 w-4 text-red-600" />
-                                </button>
+                                {isAdmin && (
+                                  <button type="button" onClick={() => startContactEdit(c)} className={iconBtn} title="Edit" aria-label="Edit contact">
+                                    <Pencil className="h-4 w-4" />
+                                  </button>
+                                )}
+                                {isAdmin && (
+                                  <button type="button" onClick={() => deleteCpContact(c.id)} className={iconBtn + " hover:bg-red-50"} title="Delete" aria-label="Delete contact">
+                                    <Trash2 className="h-4 w-4 text-red-600" />
+                                  </button>
+                                )}
                               </div>
                             )}
                           </td>
@@ -769,13 +783,15 @@ export default function CounterpartiesPage() {
                     <label className={labelCls}>Billing Email</label>
                     <input value={billingDraft.billing_email} onChange={(e) => setBillingDraft((d) => ({ ...d, billing_email: e.target.value }))} placeholder="invoices@example.com" type="email" className={inputCls} />
                   </div>
-                  <button
-                    onClick={saveBilling}
-                    disabled={savingBilling}
-                    className="w-full rounded-xl bg-[#002651] text-white py-2.5 text-sm font-bold hover:opacity-95 disabled:opacity-60 transition"
-                  >
-                    {savingBilling ? "Saving…" : billingRecord ? "Update Billing Details" : "Save Billing Details"}
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={saveBilling}
+                      disabled={savingBilling}
+                      className="w-full rounded-xl bg-[#002651] text-white py-2.5 text-sm font-bold hover:opacity-95 disabled:opacity-60 transition"
+                    >
+                      {savingBilling ? "Saving…" : billingRecord ? "Update Billing Details" : "Save Billing Details"}
+                    </button>
+                  )}
                 </div>
               ) : (
                 /* ── BANKING TAB (internal only) ── */
@@ -788,13 +804,15 @@ export default function CounterpartiesPage() {
                     <div className="space-y-3">
                       {bankAccounts.map((a) => (
                         <div key={a.id} className="rounded-xl border border-black/10 p-4 bg-black/2 relative">
-                          <button
-                            onClick={() => removeBankAccount(a.id)}
-                            className="absolute top-3 right-3 rounded-lg p-1 hover:bg-red-50"
-                            title="Remove account"
-                          >
-                            <X className="h-3.5 w-3.5 text-red-500" />
-                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => removeBankAccount(a.id)}
+                              className="absolute top-3 right-3 rounded-lg p-1 hover:bg-red-50"
+                              title="Remove account"
+                            >
+                              <X className="h-3.5 w-3.5 text-red-500" />
+                            </button>
+                          )}
                           <div className="flex items-center gap-2 mb-2">
                             <span className="inline-flex rounded-full bg-[#002651] text-white text-[10px] font-bold px-2 py-0.5">{a.currency}</span>
                             <span className="text-sm font-bold text-black">{a.bank_name}</span>
@@ -812,6 +830,7 @@ export default function CounterpartiesPage() {
                   )}
 
                   {/* Add new account form */}
+                  {isAdmin && (
                   <div className="rounded-xl border border-black/10 p-4 space-y-3">
                     <div className="text-xs font-bold text-black/50 uppercase tracking-wider flex items-center gap-1.5">
                       <Plus className="h-3.5 w-3.5" /> Add Account
@@ -856,9 +875,8 @@ export default function CounterpartiesPage() {
                       {addingBank ? "Adding…" : "Add Account"}
                     </button>
                   </div>
+                  )}
                 </div>
-              )}
-            </div>
           </div>
         </div>
       )}

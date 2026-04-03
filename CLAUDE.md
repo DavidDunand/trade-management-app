@@ -52,10 +52,18 @@ API routes always set `export const runtime = "nodejs"` and `export const dynami
 
 ### Sales role & RLS
 
-Three roles in the `user_role` enum: `admin`, `readonly`, `sales`.
+Four roles in the `user_role` enum: `admin`, `readonly`, `sales`, `operations`.
 
 **profiles table additions:**
-- `profiles.role` — `'admin' | 'readonly' | 'sales'`
+- `profiles.role` — `'admin' | 'readonly' | 'sales' | 'operations'`
+
+**Operations role permissions:**
+- Can export CSV from Blotter
+- Can download invoices (Invoicing → Receivables)
+- Can generate MiFID 2 reports
+- Everything else is read-only: no trade add/edit/clone/delete/book/cancel, no payment status changes, no mutations on products/issuers/counterparties/advisors/sales/group-entities
+- Nav hides New Trade and Trade Tickets; all other pages are accessible read-only
+- SQL migration: `supabase/add_operations_role.sql`
 - `profiles.sales_person_id` — FK → `sales_people.id`; links the logged-in user to their sales record
 
 **Helper function:** `get_my_sales_name()` (SECURITY DEFINER) — returns `first_name || ' ' || family_name` for the current user's linked sales person.

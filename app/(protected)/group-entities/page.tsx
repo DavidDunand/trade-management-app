@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/src/lib/supabase";
+import { useProfile } from "../profile-context";
 import { Pencil, Trash2, Plus, X, Users, Building2 } from "lucide-react";
 
 type GroupEntity = {
@@ -37,6 +38,7 @@ function EntityTypeBadge({ type }: { type: string }) {
 }
 
 export default function GroupEntitiesPage() {
+  const isAdmin = useProfile()?.role === "admin";
   const [entities, setEntities] = useState<GroupEntity[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -221,12 +223,14 @@ export default function GroupEntitiesPage() {
           <div className="text-sm text-black/60">Internal booking and distributing entities</div>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={() => { setShowAddForm(true); setAddDraft({ legal_name: "", ssi: "", short_name: "" }); }}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-[#002651] text-white px-4 py-2 text-sm font-bold hover:opacity-95"
-          >
-            <Plus className="h-4 w-4" /> Add Entity
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => { setShowAddForm(true); setAddDraft({ legal_name: "", ssi: "", short_name: "" }); }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#002651] text-white px-4 py-2 text-sm font-bold hover:opacity-95"
+            >
+              <Plus className="h-4 w-4" /> Add Entity
+            </button>
+          )}
           <button
             onClick={fetchEntities}
             className="rounded-xl border border-black/20 px-4 py-2 text-sm font-bold hover:bg-black/5"
@@ -290,18 +294,22 @@ export default function GroupEntitiesPage() {
                   <td className="p-3">
                     {isEdit ? (
                       <div className="flex justify-end gap-2">
-                        <button
-                          onClick={saveEdit}
-                          className="rounded-lg bg-[#002651] text-white px-3 py-1 text-sm hover:opacity-95"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={cancelEdit}
-                          className="rounded-lg border border-black/20 px-3 py-1 text-sm hover:bg-black/5"
-                        >
-                          Cancel
-                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={saveEdit}
+                            className="rounded-lg bg-[#002651] text-white px-3 py-1 text-sm hover:opacity-95"
+                          >
+                            Save
+                          </button>
+                        )}
+                        {isAdmin && (
+                          <button
+                            onClick={cancelEdit}
+                            className="rounded-lg border border-black/20 px-3 py-1 text-sm hover:bg-black/5"
+                          >
+                            Cancel
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <div className="flex justify-end items-center gap-2">
@@ -314,15 +322,17 @@ export default function GroupEntitiesPage() {
                         >
                           <Users className="h-4 w-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => startEdit(e)}
-                          className={iconBtn}
-                          title="Edit"
-                          aria-label="Edit entity"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => startEdit(e)}
+                            className={iconBtn}
+                            title="Edit"
+                            aria-label="Edit entity"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     )}
                   </td>
@@ -365,8 +375,12 @@ export default function GroupEntitiesPage() {
                 </td>
                 <td className="p-3">
                   <div className="flex justify-end gap-2">
-                    <button onClick={addEntity} className="rounded-lg bg-[#002651] text-white px-3 py-1 text-sm hover:opacity-95">Save</button>
-                    <button onClick={() => setShowAddForm(false)} className="rounded-lg border border-black/20 px-3 py-1 text-sm hover:bg-black/5">Cancel</button>
+                    {isAdmin && (
+                      <button onClick={addEntity} className="rounded-lg bg-[#002651] text-white px-3 py-1 text-sm hover:opacity-95">Save</button>
+                    )}
+                    {isAdmin && (
+                      <button onClick={() => setShowAddForm(false)} className="rounded-lg border border-black/20 px-3 py-1 text-sm hover:bg-black/5">Cancel</button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -395,7 +409,7 @@ export default function GroupEntitiesPage() {
 
             <div className="p-5 space-y-4 overflow-y-auto flex-1">
               {/* Add contact form */}
-              <div className="rounded-2xl border border-black/10 p-4 space-y-3">
+              {isAdmin && <div className="rounded-2xl border border-black/10 p-4 space-y-3">
                 <div className="text-sm font-semibold text-black/70 flex items-center gap-1">
                   <Plus className="h-4 w-4" /> Add Contact
                 </div>
@@ -433,7 +447,7 @@ export default function GroupEntitiesPage() {
                     Add contact
                   </button>
                 </div>
-              </div>
+              </div>}
 
               {/* Contacts list */}
               <div className="rounded-2xl border border-black/10 overflow-x-auto">
@@ -514,39 +528,47 @@ export default function GroupEntitiesPage() {
                           <td className="p-3">
                             {isEdit ? (
                               <div className="flex justify-end gap-2 whitespace-nowrap">
-                                <button
-                                  onClick={saveContactEdit}
-                                  className="rounded-lg bg-[#002651] text-white px-3 py-1 text-sm hover:opacity-95"
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  onClick={cancelContactEdit}
-                                  className="rounded-lg border border-black/20 px-3 py-1 text-sm hover:bg-black/5"
-                                >
-                                  Cancel
-                                </button>
+                                {isAdmin && (
+                                  <button
+                                    onClick={saveContactEdit}
+                                    className="rounded-lg bg-[#002651] text-white px-3 py-1 text-sm hover:opacity-95"
+                                  >
+                                    Save
+                                  </button>
+                                )}
+                                {isAdmin && (
+                                  <button
+                                    onClick={cancelContactEdit}
+                                    className="rounded-lg border border-black/20 px-3 py-1 text-sm hover:bg-black/5"
+                                  >
+                                    Cancel
+                                  </button>
+                                )}
                               </div>
                             ) : (
                               <div className="flex justify-end items-center gap-2 whitespace-nowrap">
-                                <button
-                                  type="button"
-                                  onClick={() => startContactEdit(c)}
-                                  className={iconBtn}
-                                  title="Edit"
-                                  aria-label="Edit contact"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => deleteContact(c.id)}
-                                  className={iconBtn + " hover:bg-red-50"}
-                                  title="Delete"
-                                  aria-label="Delete contact"
-                                >
-                                  <Trash2 className="h-4 w-4 text-red-600" />
-                                </button>
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => startContactEdit(c)}
+                                    className={iconBtn}
+                                    title="Edit"
+                                    aria-label="Edit contact"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </button>
+                                )}
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteContact(c.id)}
+                                    className={iconBtn + " hover:bg-red-50"}
+                                    title="Delete"
+                                    aria-label="Delete contact"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-600" />
+                                  </button>
+                                )}
                               </div>
                             )}
                           </td>

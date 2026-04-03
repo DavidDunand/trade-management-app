@@ -20,6 +20,7 @@ function PaginationBar({ page, total, pageSize, label, onPage }: { page: number;
   );
 }
 import { supabase } from "@/src/lib/supabase";
+import { useProfile } from "../profile-context";
 
 import { CheckCircle, Clock, FileText, X } from "lucide-react";
 
@@ -480,6 +481,7 @@ function exportPayablesToCsv(rows: PayableRow[], retroMap: Map<string, RetroPaym
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
 export default function InvoicingPage() {
+  const isAdmin = useProfile()?.role === "admin";
   const [tab, setTab] = useState<"receivables" | "payables">("receivables");
   const [trades, setTrades] = useState<TradeRow[]>([]);
   const [invoiceMap, setInvoiceMap] = useState<Map<string, InvoiceRecord>>(new Map());
@@ -995,7 +997,9 @@ export default function InvoicingPage() {
                         <td className="px-4 py-3 text-[12px] text-right font-mono">{formatNumber(t.total_size)}</td>
                         <td className="px-4 py-3 text-[12px] text-right font-mono font-bold text-emerald-700">{formatNumber(t.gross_fees)}</td>
                         <td className="px-4 py-3">
-                          <button onClick={() => togglePaymentStatus(t)} title="Click to toggle"><InvoiceStatusBadge status={status} /></button>
+                          {isAdmin
+                            ? <button onClick={() => togglePaymentStatus(t)} title="Click to toggle"><InvoiceStatusBadge status={status} /></button>
+                            : <InvoiceStatusBadge status={status} />}
                         </td>
                         <td className="px-4 py-3 text-center">
                           {downloaded
@@ -1105,9 +1109,15 @@ export default function InvoicingPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 min-w-[210px]">
-                          <select value={status} onChange={(e) => updateRetroStatus(r, e.target.value as RetroStatus)} className={`rounded-lg border px-2 py-1.5 text-[11px] font-bold w-full transition ${selectColorClass}`}>
-                            {RETRO_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </select>
+                          {isAdmin ? (
+                            <select value={status} onChange={(e) => updateRetroStatus(r, e.target.value as RetroStatus)} className={`rounded-lg border px-2 py-1.5 text-[11px] font-bold w-full transition ${selectColorClass}`}>
+                              {RETRO_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                          ) : (
+                            <span className={`inline-flex rounded-lg border px-2 py-1.5 text-[11px] font-bold ${selectColorClass}`}>
+                              {RETRO_STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status}
+                            </span>
+                          )}
                         </td>
                       </tr>
                     );

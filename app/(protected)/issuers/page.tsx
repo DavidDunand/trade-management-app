@@ -2,6 +2,7 @@
 export const dynamic = "force-dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/src/lib/supabase";
+import { useProfile } from "../profile-context";
 import { Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 
 type Issuer = {
@@ -14,6 +15,7 @@ type SortKey = "legal_name" | "country_code" | null;
 type SortDir = "asc" | "desc";
 
 export default function IssuersPage() {
+  const isAdmin = useProfile()?.role === "admin";
   const [issuers, setIssuers] = useState<Issuer[]>([]);
   const [name, setName] = useState("");
   const [country, setCountry] = useState("");
@@ -172,7 +174,7 @@ export default function IssuersPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold text-black">Issuers</h1>
 
-      <div className="rounded-2xl border border-black/10 p-5 space-y-4">
+      {isAdmin && <div className="rounded-2xl border border-black/10 p-5 space-y-4">
         <div className="flex gap-4">
           <input
             placeholder="Legal Name (e.g. BNP Paribas SA, France)"
@@ -193,7 +195,7 @@ export default function IssuersPage() {
             Add
           </button>
         </div>
-      </div>
+      </div>}
 
       <div className="rounded-2xl border border-black/10 overflow-hidden">
         <table className="w-full text-sm">
@@ -256,7 +258,7 @@ export default function IssuersPage() {
                   </td>
 
                   <td className="p-3">
-                    {isEditing ? (
+                    {isAdmin && (isEditing ? (
                       <div className="flex gap-2">
                         <button
                           onClick={saveEdit}
@@ -293,7 +295,7 @@ export default function IssuersPage() {
                           <Trash2 className="h-4 w-4 text-red-600" />
                         </button>
                       </div>
-                    )}
+                    ))}
                   </td>
                 </tr>
               );

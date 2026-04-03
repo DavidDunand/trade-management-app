@@ -29,13 +29,17 @@ type NavItemDef = {
   href: string;
   label: string;
   icon: React.ElementType;
-  adminOnly?: boolean;   // hidden from readonly and sales
-  salesAllowed?: boolean; // explicitly shown to sales (overrides adminOnly for sales)
+  adminOnly?: boolean;       // hidden from readonly and sales
+  salesAllowed?: boolean;    // explicitly shown to sales (overrides adminOnly for sales)
+  operationsHidden?: boolean; // hidden from operations role
   disabled?: boolean;
 };
 
 // Routes a sales user is allowed to visit
 const SALES_ALLOWED_ROUTES = ["/dashboard", "/blotter"];
+
+// Routes an operations user cannot visit
+const OPERATIONS_BLOCKED_ROUTES = ["/new-trade", "/trade-tickets"];
 
 function NavSectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -177,21 +181,29 @@ export default function ProtectedLayout({
     if (!allowed) router.replace("/dashboard");
   }, [profile, pathname, router]);
 
+  // Route guard: redirect operations users away from blocked pages
+  useEffect(() => {
+    if (!profile || profile.role !== "operations") return;
+    const blocked = OPERATIONS_BLOCKED_ROUTES.some((r) => pathname.startsWith(r));
+    if (blocked) router.replace("/dashboard");
+  }, [profile, pathname, router]);
+
   const isAdmin = profile?.role === "admin";
   const isSales = profile?.role === "sales";
+  const isOperations = profile?.role === "operations";
 
   const tradingItems: NavItemDef[] = useMemo(
     () => [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, salesAllowed: true },
       { href: "/blotter", label: "Blotter", icon: ScrollText, adminOnly: true, salesAllowed: true },
-      { href: "/new-trade", label: "New Trade", icon: PlusCircle, adminOnly: true },
+      { href: "/new-trade", label: "New Trade", icon: PlusCircle, adminOnly: true, operationsHidden: true },
     ],
     []
   );
 
   const docItems: NavItemDef[] = useMemo(
     () => [
-      { href: "/trade-tickets", label: "Trade Tickets", icon: FileText, adminOnly: true },
+      { href: "/trade-tickets", label: "Trade Tickets", icon: FileText, adminOnly: true, operationsHidden: true },
       { href: "/transaction-reporting", label: "MiFID 2 Report", icon: FileSpreadsheet, adminOnly: true },
       { href: "/invoicing", label: "Invoicing", icon: FileSpreadsheet, adminOnly: true },
     ],
@@ -212,7 +224,7 @@ export default function ProtectedLayout({
 
   const visible = (items: NavItemDef[]) =>
     items.filter((i) => {
-      if (isAdmin) return true;
+      if (isAdmin || isOperations) return true;
       if (isSales) return i.salesAllowed === true;
       // readonly: hide adminOnly items
       return !i.adminOnly;

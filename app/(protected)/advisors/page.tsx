@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/src/lib/supabase";
+import { useProfile } from "../profile-context";
 import {
   Pencil,
   Trash2,
@@ -46,6 +47,8 @@ type SortKey = "legal_name" | "country_code" | "owner" | null;
 type SortDir = "asc" | "desc";
 
 export default function AdvisorsPage() {
+  const isAdmin = useProfile()?.role === "admin";
+
   const [mode, setMode] = useState<AdvisorType>("client");
 
   const [rows, setRows] = useState<Advisor[]>([]);
@@ -384,6 +387,7 @@ export default function AdvisorsPage() {
       </div>
 
       {/* Add */}
+      {isAdmin && (
       <div className="rounded-2xl border border-black/10 p-5 space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
           <input
@@ -419,6 +423,7 @@ export default function AdvisorsPage() {
           </button>
         </div>
       </div>
+      )}
 
       {/* Table */}
       <div className="rounded-2xl border border-black/10 overflow-hidden">
@@ -525,18 +530,22 @@ export default function AdvisorsPage() {
                   <td className="p-3">
                     {isEdit ? (
                       <div className="flex justify-end gap-2">
+                        {isAdmin && (
                         <button
                           onClick={saveAdvisorEdit}
                           className="rounded-lg bg-[#002651] text-white px-3 py-1 text-sm hover:opacity-95"
                         >
                           Save
                         </button>
+                        )}
+                        {isAdmin && (
                         <button
                           onClick={cancelAdvisorEdit}
                           className="rounded-lg border border-black/20 px-3 py-1 text-sm hover:bg-black/5"
                         >
                           Cancel
                         </button>
+                        )}
                       </div>
                     ) : (
                       <div className="flex justify-end items-center gap-2">
@@ -550,6 +559,7 @@ export default function AdvisorsPage() {
                           <Users className="h-4 w-4" />
                         </button>
 
+                        {isAdmin && (
                         <button
                           type="button"
                           onClick={() => startAdvisorEdit(r)}
@@ -559,7 +569,9 @@ export default function AdvisorsPage() {
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
+                        )}
 
+                        {isAdmin && (
                         <button
                           type="button"
                           onClick={() => deleteAdvisor(r.id)}
@@ -569,6 +581,7 @@ export default function AdvisorsPage() {
                         >
                           <Trash2 className="h-4 w-4 text-red-600" />
                         </button>
+                        )}
                       </div>
                     )}
                   </td>
@@ -607,6 +620,7 @@ export default function AdvisorsPage() {
 
             <div className="p-5 space-y-4 overflow-y-auto">
               {/* Add contact */}
+              {isAdmin && (
               <div className="rounded-2xl border border-black/10 p-4 space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <input
@@ -638,6 +652,7 @@ export default function AdvisorsPage() {
                   </button>
                 </div>
               </div>
+              )}
 
               {/* Contacts table */}
               <div className="rounded-2xl border border-black/10 overflow-x-auto">
@@ -715,21 +730,26 @@ export default function AdvisorsPage() {
                           <td className="p-3">
                             {isEdit ? (
                               <div className="flex justify-end gap-2 whitespace-nowrap">
+                                {isAdmin && (
                                 <button
                                   onClick={saveContactEdit}
                                   className="rounded-lg bg-[#002651] text-white px-3 py-1 text-sm hover:opacity-95"
                                 >
                                   Save
                                 </button>
+                                )}
+                                {isAdmin && (
                                 <button
                                   onClick={cancelContactEdit}
                                   className="rounded-lg border border-black/20 px-3 py-1 text-sm hover:bg-black/5"
                                 >
                                   Cancel
                                 </button>
+                                )}
                               </div>
                             ) : (
 <div className="flex justify-end items-center gap-2 whitespace-nowrap">
+  {isAdmin && (
   <button
     type="button"
     onClick={() => startContactEdit(c)}
@@ -739,7 +759,9 @@ export default function AdvisorsPage() {
   >
     <Pencil className="h-4 w-4" />
   </button>
+  )}
 
+  {isAdmin && (
   <button
     type="button"
     onClick={() => deleteContact(c.id)}
@@ -749,6 +771,7 @@ export default function AdvisorsPage() {
   >
     <Trash2 className="h-4 w-4 text-red-600" />
   </button>
+  )}
 </div>
                             )}
                           </td>

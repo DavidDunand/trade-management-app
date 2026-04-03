@@ -2,6 +2,7 @@
 export const dynamic = "force-dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/src/lib/supabase";
+import { useProfile } from "../profile-context";
 import {
   Pencil,
   Trash2,
@@ -53,6 +54,7 @@ type SortKey = "issuer" | "currency" | "settlement" | null;
 type SortDir = "asc" | "desc";
 
 export default function ProductsPage() {
+  const isAdmin = useProfile()?.role === "admin";
   const [products, setProducts] = useState<Product[]>([]);
   const [issuers, setIssuers] = useState<Issuer[]>([]);
 
@@ -374,7 +376,7 @@ export default function ProductsPage() {
       </div>
 
       {/* Create product */}
-      <div className="rounded-2xl border border-black/10 p-5 space-y-4">
+      {isAdmin && <div className="rounded-2xl border border-black/10 p-5 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-black mb-1">
@@ -518,7 +520,7 @@ export default function ProductsPage() {
             Refresh
           </button>
         </div>
-      </div>
+      </div>}
 
       {/* List */}
       <div className="rounded-2xl border border-black/10 overflow-hidden">
@@ -734,7 +736,7 @@ const settlementBadge = (() => {
                   <td className="p-3">{statusPill}</td>
 
                   <td className="p-3">
-                    {isEditing ? (
+                    {isAdmin && (isEditing ? (
                       <div className="flex gap-2">
                         <button
                           onClick={saveEdit}
@@ -775,17 +777,17 @@ const settlementBadge = (() => {
                           )}
                         </button>
 
-<button
-  type="button"
-  onClick={() => deleteProduct(p.id)}
-  className={iconBtn + " hover:bg-red-50"}
-  title="Delete"
-  aria-label="Delete product"
->
-  <Trash2 className="h-4 w-4 text-red-600" />
-</button>
+                        <button
+                          type="button"
+                          onClick={() => deleteProduct(p.id)}
+                          className={iconBtn + " hover:bg-red-50"}
+                          title="Delete"
+                          aria-label="Delete product"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </button>
                       </div>
-                    )}
+                    ))}
                   </td>
                 </tr>
               );
