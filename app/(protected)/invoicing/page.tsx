@@ -700,8 +700,7 @@ export default function InvoicingPage() {
       if (clientActive || introducerActive) {
         const matchesClient = clientActive && r.recipientType === "client" && payClientFilter.includes(r.recipientName ?? "");
         const matchesIntroducer = introducerActive && r.recipientType === "introducer" && payIntroducerFilter.includes(r.recipientName ?? "");
-        const isCustodian = r.recipientType === "custodian"; // custodian rows always shown regardless of client/introducer filter
-        if (!matchesClient && !matchesIntroducer && !isCustodian) return false;
+        if (!matchesClient && !matchesIntroducer) return false;
       }
       if (payIsinFilter && !(r.trade.product?.isin ?? "").toLowerCase().includes(payIsinFilter.toLowerCase())) return false;
       if (payTradeStatusFilter !== "all" && (r.trade.status ?? "") !== payTradeStatusFilter) return false;
