@@ -39,7 +39,7 @@ type NavItemDef = {
 const SALES_ALLOWED_ROUTES = ["/dashboard", "/blotter"];
 
 // Routes an operations user cannot visit
-const OPERATIONS_BLOCKED_ROUTES = ["/new-trade", "/trade-tickets"];
+const OPERATIONS_BLOCKED_ROUTES = ["/new-trade"];
 
 function NavSectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -203,7 +203,7 @@ export default function ProtectedLayout({
 
   const docItems: NavItemDef[] = useMemo(
     () => [
-      { href: "/trade-tickets", label: "Trade Tickets", icon: FileText, adminOnly: true, operationsHidden: true },
+      { href: "/trade-tickets", label: "Trade Tickets", icon: FileText, adminOnly: true },
       { href: "/transaction-reporting", label: "MiFID 2 Report", icon: FileSpreadsheet, adminOnly: true },
       { href: "/invoicing", label: "Invoicing", icon: FileSpreadsheet, adminOnly: true },
     ],
