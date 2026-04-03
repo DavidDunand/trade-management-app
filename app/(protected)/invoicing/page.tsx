@@ -553,6 +553,7 @@ export default function InvoicingPage() {
             issuer:issuer_id(legal_name)
           )
         `)
+        .neq("status", "cancelled")
         .order("trade_date", { ascending: false });
 
       if (tradeError) throw tradeError;
