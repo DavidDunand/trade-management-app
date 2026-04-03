@@ -52,10 +52,17 @@ API routes always set `export const runtime = "nodejs"` and `export const dynami
 
 ### Sales role & RLS
 
-Four roles in the `user_role` enum: `admin`, `readonly`, `sales`, `operations`.
+Five roles in the `user_role` enum: `admin`, `readonly`, `sales`, `operations`, `payments`.
 
 **profiles table additions:**
 - `profiles.role` — `'admin' | 'readonly' | 'sales' | 'operations'`
+
+**Payments role permissions:**
+- Full nav visible but only Invoicing is clickable (all others are non-interactive divs)
+- Redirected to `/invoicing` if they navigate elsewhere
+- Receivables: full access (invoice download + payment status toggle)
+- Payables: read-only (static status label, no dropdown)
+- SQL migration: `supabase/add_payments_role.sql`
 
 **Operations role permissions:**
 - Can export CSV from Blotter

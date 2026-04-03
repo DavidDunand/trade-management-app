@@ -481,7 +481,9 @@ function exportPayablesToCsv(rows: PayableRow[], retroMap: Map<string, RetroPaym
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
 export default function InvoicingPage() {
-  const isAdmin = useProfile()?.role === "admin";
+  const profile = useProfile();
+  const isAdmin = profile?.role === "admin";
+  const canTogglePayment = profile?.role === "admin" || profile?.role === "payments";
   const [tab, setTab] = useState<"receivables" | "payables">("receivables");
   const [trades, setTrades] = useState<TradeRow[]>([]);
   const [invoiceMap, setInvoiceMap] = useState<Map<string, InvoiceRecord>>(new Map());
@@ -997,7 +999,7 @@ export default function InvoicingPage() {
                         <td className="px-4 py-3 text-[12px] text-right font-mono">{formatNumber(t.total_size)}</td>
                         <td className="px-4 py-3 text-[12px] text-right font-mono font-bold text-emerald-700">{formatNumber(t.gross_fees)}</td>
                         <td className="px-4 py-3">
-                          {isAdmin
+                          {canTogglePayment
                             ? <button onClick={() => togglePaymentStatus(t)} title="Click to toggle"><InvoiceStatusBadge status={status} /></button>
                             : <InvoiceStatusBadge status={status} />}
                         </td>

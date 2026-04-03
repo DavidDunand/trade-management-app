@@ -6,7 +6,7 @@ export type AppProfile = {
   id: string;
   email: string | null;
   full_name: string;
-  role: "admin" | "readonly" | "sales" | "operations";
+  role: "admin" | "readonly" | "sales" | "operations" | "payments";
   active: boolean;
   salesPersonName: string | null; // set for sales role only
 };

@@ -51,13 +51,24 @@ function NavSectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-function NavItem({ item, badge }: { item: NavItemDef; badge?: React.ReactNode }) {
+function NavItem({ item, badge, locked }: { item: NavItemDef; badge?: React.ReactNode; locked?: boolean }) {
   const pathname = usePathname();
   const active = pathname === item.href;
   const Icon = item.icon;
 
   const base =
     "group relative flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] leading-5 transition-colors";
+
+  if (locked) {
+    return (
+      <div className={`${base} text-white/80 cursor-default`}>
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/5">
+          <Icon className="h-4 w-4" />
+        </span>
+        <span className="truncate">{item.label}</span>
+      </div>
+    );
+  }
 
   if (item.disabled) {
     return (
@@ -188,9 +199,16 @@ export default function ProtectedLayout({
     if (blocked) router.replace("/dashboard");
   }, [profile, pathname, router]);
 
+  // Route guard: payments users can only visit /invoicing
+  useEffect(() => {
+    if (!profile || profile.role !== "payments") return;
+    if (!pathname.startsWith("/invoicing")) router.replace("/invoicing");
+  }, [profile, pathname, router]);
+
   const isAdmin = profile?.role === "admin";
   const isSales = profile?.role === "sales";
   const isOperations = profile?.role === "operations";
+  const isPayments = profile?.role === "payments";
 
   const tradingItems: NavItemDef[] = useMemo(
     () => [
@@ -224,7 +242,7 @@ export default function ProtectedLayout({
 
   const visible = (items: NavItemDef[]) =>
     items.filter((i) => {
-      if (isAdmin || isOperations) return true;
+      if (isAdmin || isOperations || isPayments) return true;
       if (isSales) return i.salesAllowed === true;
       // readonly: hide adminOnly items
       return !i.adminOnly;
@@ -261,7 +279,7 @@ export default function ProtectedLayout({
             <NavSectionTitle>Trading</NavSectionTitle>
             <div className="space-y-1">
               {visible(tradingItems).map((item) => (
-                <NavItem key={item.href} item={item} />
+                <NavItem key={item.href} item={item} locked={isPayments} />
               ))}
             </div>
 
@@ -271,6 +289,7 @@ export default function ProtectedLayout({
                 <NavItem
                   key={item.href}
                   item={item}
+                  locked={isPayments && item.href !== "/invoicing"}
                   badge={item.href === "/transaction-reporting" ? <MifidNavBadge /> : undefined}
                 />
               ))}
@@ -279,7 +298,7 @@ export default function ProtectedLayout({
             <NavSectionTitle>Database</NavSectionTitle>
             <div className="space-y-1">
               {visible(dbItems).map((item) => (
-                <NavItem key={item.href} item={item} />
+                <NavItem key={item.href} item={item} locked={isPayments} />
               ))}
             </div>
 
