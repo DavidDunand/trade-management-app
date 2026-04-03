@@ -185,7 +185,8 @@ async function generateInvoicePdf(
   bankAccount: BankAccountRecord | null,
   dealerBilling: BillingRecord | null,
   dealerName: string,
-  senderEntityName: string
+  senderEntityName: string,
+  invoiceDate: string
 ) {
   const isin = trade.product?.isin ?? "—";
   const productName = trade.product?.product_name ?? "—";
@@ -194,7 +195,7 @@ async function generateInvoicePdf(
   const tradeDate = formatDate(trade.trade_date);
   const valueDate = formatDate(trade.value_date);
   const grossFees = formatNumber(trade.gross_fees);
-  const today = formatDate(new Date().toISOString().slice(0, 10));
+  const today = formatDate(invoiceDate);
   const invoiceNumber = `INV-${ref}-${new Date().getFullYear()}`;
 
   const senderName = senderBilling?.billing_entity ?? senderEntityName;
@@ -633,15 +634,17 @@ export default function InvoicingPage() {
   // ─── Derived data ──────────────────────────────────────────────────────────
 
   const receivableTrades = useMemo(
-    () => trades.filter((t) => riverrockEntityName && t.booking_entity?.legal_name === riverrockEntityName && Number(t.gross_fees ?? 0) > 0),
+    () => trades.filter((t) => t.status !== "cancelled" && riverrockEntityName && t.booking_entity?.legal_name === riverrockEntityName && Number(t.gross_fees ?? 0) > 0),
     [trades, riverrockEntityName]
   );
 
   const payableTrades = useMemo(
     () => trades.filter((t) =>
-      Number(t.retro_client ?? 0) > 0 ||
-      Number(t.retro_introducer ?? 0) > 0 ||
-      Number(t.fee_custodian ?? 0) > 0
+      t.status !== "cancelled" && (
+        Number(t.retro_client ?? 0) > 0 ||
+        Number(t.retro_introducer ?? 0) > 0 ||
+        Number(t.fee_custodian ?? 0) > 0
+      )
     ),
     [trades]
   );
@@ -773,14 +776,15 @@ export default function InvoicingPage() {
     dealerBilling: BillingRecord | null,
     dealerName: string
   ) {
-    await generateInvoicePdf(trade, senderBilling, bankAccount, dealerBilling, dealerName, riverrockEntityName);
-
-    // Track download
     const existing = invoiceMap.get(trade.id);
     const now = new Date().toISOString();
+    const invoiceDate = existing?.downloaded_at ?? now;
+
+    await generateInvoicePdf(trade, senderBilling, bankAccount, dealerBilling, dealerName, riverrockEntityName, invoiceDate);
+
+    // Track download — only set downloaded_at on first creation
     if (existing) {
-      await supabase.from("invoices").update({ downloaded_at: now }).eq("id", existing.id);
-      setInvoiceMap((prev) => { const m = new Map(prev); m.set(trade.id, { ...existing, downloaded_at: now }); return m; });
+      // Re-download: do not update timestamp
     } else {
       const { data } = await supabase.from("invoices").insert({ trade_id: trade.id, downloaded_at: now, payment_status: "pending" }).select().single();
       if (data) setInvoiceMap((prev) => { const m = new Map(prev); m.set(trade.id, data as InvoiceRecord); return m; });
@@ -965,7 +969,7 @@ export default function InvoicingPage() {
                     <TH right>Size</TH>
                     <TH right>Gross Fees</TH>
                     <TH>Invoice Status</TH>
-                    <TH>Downloaded</TH>
+                    <TH>Invoice Issue Date</TH>
                     <TH>Actions</TH>
                   </tr>
                 </thead>
@@ -976,7 +980,6 @@ export default function InvoicingPage() {
                   {pagedReceivables.map((t, i) => {
                     const inv = invoiceMap.get(t.id);
                     const status = inv?.payment_status ?? "pending";
-                    const downloaded = !!inv?.downloaded_at;
                     const dealer = dealerMap.get(t.id) ?? "—";
                     return (
                       <tr key={t.id} className={`border-t border-black/5 ${rowBg(i)} hover:bg-blue-50/60 transition-colors`}>
@@ -997,10 +1000,10 @@ export default function InvoicingPage() {
                         <td className="px-4 py-3">
                           <button onClick={() => togglePaymentStatus(t)} title="Click to toggle"><InvoiceStatusBadge status={status} /></button>
                         </td>
-                        <td className="px-4 py-3 text-center">
-                          {downloaded
-                            ? <span title={`Downloaded ${formatDate(inv?.downloaded_at)}`} className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100 text-emerald-600"><CheckCircle className="h-3.5 w-3.5" /></span>
-                            : <span className="text-black/20 text-xs">—</span>}
+                        <td className="px-4 py-3 text-[12px]">
+                          {inv?.downloaded_at
+                            ? <span className="font-mono text-black/60">{formatDate(inv.downloaded_at)}</span>
+                            : <span className="text-black/30">Not issued</span>}
                         </td>
                         <td className="px-4 py-3">
                           <button onClick={() => handleGenerateInvoice(t)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#002651] text-white px-3 py-1.5 text-[11px] font-bold hover:opacity-90 transition whitespace-nowrap">
